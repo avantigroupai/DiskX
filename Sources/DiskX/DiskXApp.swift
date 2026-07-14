@@ -31,11 +31,12 @@ struct DiskXApp: App {
                     .keyboardShortcut("z")
                     .disabled(model.undoStack.isEmpty)
             }
-            CommandGroup(replacing: .pasteboard) {
+            // Standard Edit items stay intact for text fields; row-scoped ⌘A/⌘C are
+            // handled by the key dispatcher when no field is focused.
+            CommandGroup(after: .pasteboard) {
+                Divider()
                 Button("Copy Path") { model.copyPath() }
-                    .keyboardShortcut("c")
-                Button("Select All") { model.selectAll() }
-                    .keyboardShortcut("a")
+                    .keyboardShortcut("c", modifiers: [.command, .option])
             }
             CommandMenu("Go") {
                 Button("Enclosing Folder") { model.ascend() }

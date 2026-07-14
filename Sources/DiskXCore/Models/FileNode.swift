@@ -140,18 +140,68 @@ public final class FileNode: Identifiable, @unchecked Sendable {
     }
 
     /// Depth-first search for the biggest files under this node.
+    /// Bounded selection (size-keyed min-heap of `limit`), O(F log limit) — never
+    /// materializes or sorts the full file list.
     public func largestFiles(limit: Int) -> [FileNode] {
-        var files: [FileNode] = []
+        guard limit > 0 else { return [] }
+        var heap = MinHeap(capacity: limit)
         var stack: [FileNode] = [self]
         while let node = stack.popLast() {
             if node.isDirectory {
                 stack.append(contentsOf: node.children)
             } else {
-                files.append(node)
+                heap.offer(node, key: node.allocatedSize)
             }
         }
-        files.sort { $0.allocatedSize > $1.allocatedSize }
-        return Array(files.prefix(limit))
+        return heap.sortedDescending()
+    }
+}
+
+/// Fixed-capacity min-heap keyed by size, used for top-N file selection.
+private struct MinHeap {
+    private var nodes: [(key: Int64, node: FileNode)] = []
+    private let capacity: Int
+
+    init(capacity: Int) {
+        self.capacity = capacity
+        nodes.reserveCapacity(capacity + 1)
+    }
+
+    mutating func offer(_ node: FileNode, key: Int64) {
+        if nodes.count < capacity {
+            nodes.append((key, node))
+            siftUp(nodes.count - 1)
+        } else if key > nodes[0].key {
+            nodes[0] = (key, node)
+            siftDown(0)
+        }
+    }
+
+    func sortedDescending() -> [FileNode] {
+        nodes.sorted { $0.key > $1.key }.map(\.node)
+    }
+
+    private mutating func siftUp(_ i: Int) {
+        var child = i
+        while child > 0 {
+            let parent = (child - 1) / 2
+            guard nodes[child].key < nodes[parent].key else { break }
+            nodes.swapAt(child, parent)
+            child = parent
+        }
+    }
+
+    private mutating func siftDown(_ i: Int) {
+        var parent = i
+        while true {
+            let left = 2 * parent + 1, right = left + 1
+            var smallest = parent
+            if left < nodes.count && nodes[left].key < nodes[smallest].key { smallest = left }
+            if right < nodes.count && nodes[right].key < nodes[smallest].key { smallest = right }
+            guard smallest != parent else { break }
+            nodes.swapAt(parent, smallest)
+            parent = smallest
+        }
     }
 }
 

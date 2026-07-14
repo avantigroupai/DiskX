@@ -45,6 +45,7 @@ public final class ScanSession: @unchecked Sendable {
     private static let CMN_RETURNED_ATTRS: UInt32 = 0x8000_0000
     private static let CMN_ERROR: UInt32 = 0x2000_0000
     private static let CMN_NAME: UInt32 = 0x0000_0001
+    private static let CMN_DEVID: UInt32 = 0x0000_0002
     private static let CMN_OBJTYPE: UInt32 = 0x0000_0008
     private static let CMN_MODTIME: UInt32 = 0x0000_0400
     private static let CMN_ACCTIME: UInt32 = 0x0000_1000
@@ -66,11 +67,14 @@ public final class ScanSession: @unchecked Sendable {
     ]
 
     /// Paths never descended into when scanning system roots (other volumes, VM, autofs).
+    /// /System/Volumes/Data is skipped because its content is already reached through
+    /// the root-level firmlinks (/Users, /Applications, …) — descending would count
+    /// the whole Data volume twice.
     static let systemSkipPaths: Set<String> = [
         "/Volumes", "/dev", "/net", "/home",
         "/System/Volumes/Preboot", "/System/Volumes/VM", "/System/Volumes/Update",
         "/System/Volumes/Recovery", "/System/Volumes/Hardware", "/System/Volumes/iSCPreboot",
-        "/System/Volumes/xarts", "/System/Volumes/Data/home",
+        "/System/Volumes/xarts", "/System/Volumes/Data",
         "/private/var/vm",
     ]
 
@@ -82,8 +86,13 @@ public final class ScanSession: @unchecked Sendable {
     private var outstanding: Int = 0
     private var cancelled = false
 
+    private struct HardlinkKey: Hashable {
+        let dev: UInt32
+        let ino: UInt64
+    }
+
     private let progressLock = OSAllocatedUnfairLock(initialState: ScanProgress())
-    private let hardlinkLock = OSAllocatedUnfairLock(initialState: Set<UInt64>())
+    private let hardlinkLock = OSAllocatedUnfairLock(initialState: Set<HardlinkKey>())
     private let idCounter = OSAllocatedUnfairLock(initialState: UInt64(0))
 
     private let workerCount: Int
@@ -111,13 +120,16 @@ public final class ScanSession: @unchecked Sendable {
     }
 
     public func start() {
-        var st = stat()
-        guard lstat(rootPath, &st) == 0 else {
+        // Probe with open(2), not just lstat: an unreadable root must fail loudly
+        // instead of completing as an empty "success".
+        let probeFD = open(rootPath, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        guard probeFD >= 0 else {
             let err = errno
             let cb = onCompletion, path = rootPath
             DispatchQueue.main.async { cb(.failure(.cannotOpenRoot(path, errno: err))) }
             return
         }
+        close(probeFD)
 
         let rootName = rootPath == "/" ? "/" : rootPath
         let rootNode = FileNode(id: nextID(), name: rootName, flags: [.directory], parent: nil)
@@ -203,7 +215,7 @@ public final class ScanSession: @unchecked Sendable {
 
         var attrs = attrlist()
         attrs.bitmapcount = u_short(ATTR_BIT_MAP_COUNT)
-        attrs.commonattr = Self.CMN_RETURNED_ATTRS | Self.CMN_ERROR | Self.CMN_NAME
+        attrs.commonattr = Self.CMN_RETURNED_ATTRS | Self.CMN_ERROR | Self.CMN_NAME | Self.CMN_DEVID
             | Self.CMN_OBJTYPE | Self.CMN_MODTIME | Self.CMN_ACCTIME | Self.CMN_FILEID
         attrs.fileattr = Self.FILE_LINKCOUNT | Self.FILE_TOTALSIZE | Self.FILE_ALLOCSIZE
 
@@ -237,6 +249,12 @@ public final class ScanSession: @unchecked Sendable {
                     let nameOffset = Int(p.loadUnaligned(as: Int32.self))
                     name = String(cString: p.advanced(by: nameOffset).assumingMemoryBound(to: CChar.self))
                     p = p.advanced(by: 8)
+                }
+
+                var devID: UInt32 = 0
+                if retCommon & Self.CMN_DEVID != 0 {
+                    devID = p.loadUnaligned(as: UInt32.self)
+                    p = p.advanced(by: 4)
                 }
 
                 var objType: UInt32 = 0
@@ -303,11 +321,12 @@ public final class ScanSession: @unchecked Sendable {
                     var flags: FileNode.Flags = objType == Self.VLNK ? [.symlink] : []
                     var countedAllocated = allocatedSize
                     var countedLogical = logicalSize
-                    // Hard links: count the size only once per inode.
+                    // Hard links: count the size only once per (device, inode) —
+                    // inode numbers alone can repeat across volumes.
                     if linkCount > 1 && fileID != 0 {
-                        let inode = fileID
+                        let key = HardlinkKey(dev: devID, ino: fileID)
                         let isFirst = hardlinkLock.withLock { seen -> Bool in
-                            seen.insert(inode).inserted
+                            seen.insert(key).inserted
                         }
                         if !isFirst {
                             flags.insert(.hardlinkDup)

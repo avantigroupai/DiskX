@@ -94,7 +94,8 @@ struct Row: Identifiable, Equatable {
     var id: UInt64 { node.id }
 }
 
-struct DeletePlan {
+struct DeletePlan: Identifiable {
+    let id = UUID()
     let items: [FileNode]
     let totalBytes: Int64
     let safeBytes: Int64
@@ -127,10 +128,6 @@ struct ScanTarget: Identifiable, Hashable {
     var id: String { path }
 }
 
-enum FocusPane {
-    case list, map
-}
-
 // MARK: - AppModel
 
 @MainActor
@@ -157,7 +154,6 @@ final class AppModel {
     var selectedIDs: Set<UInt64> = []
     private var selectionAnchor: Int?
     private(set) var marks: [UInt64: FileNode] = [:]
-    var focusPane: FocusPane = .list
 
     // Lenses
     var sortMode: SortMode = .reclaim { didSet { refreshRows(resetCursor: true) } }
@@ -178,6 +174,7 @@ final class AppModel {
     private(set) var undoStack: [[TrashRecord]] = []
     private(set) var freedThisSession: Int64 = 0
     var isTrashing = false
+    private(set) var isRestoring = false
 
     // Chrome
     var truth = TruthStats()
@@ -207,11 +204,18 @@ final class AppModel {
     // MARK: - Scan lifecycle
 
     func startScan(path: String) {
+        // A trash batch holds live nodes of the current tree — never swap the tree
+        // out underneath it.
+        guard !isTrashing && !isRestoring else {
+            showToast("Finishing a Trash operation — try again in a moment")
+            return
+        }
         session?.cancel()
         progressTimer?.invalidate()
         scanGeneration += 1
         let generation = scanGeneration
 
+        pendingDelete = nil
         scanTargetPath = path
         phase = .scanning
         root = nil
@@ -334,20 +338,38 @@ final class AppModel {
 
     // MARK: - Rows
 
+    private var flatCache: [FileNode] = []
+    private var flatCacheKey = ""
+
     func refreshRows(resetCursor: Bool) {
         guard let root else { rows = []; return }
+
+        // The cursor tracks a NODE, not an index: live re-sorts must never make the
+        // highlight (and thus Delete) silently land on a different file.
+        let previousCursorID: UInt64? = rows.indices.contains(cursor) ? rows[cursor].id : nil
+        let previousAnchorID: UInt64? = selectionAnchor.flatMap {
+            rows.indices.contains($0) ? rows[$0].id : nil
+        }
+
         let listing: [FileNode]
         var ghosts: [(FileNode, Int)] = []
 
         if flatTop || scope != nil {
-            var files = root.largestFiles(limit: 2000)
-            if let scope, let analyzer {
-                files = files.filter { scope.matches(info: analyzer.info(for: $0), node: $0) }
-                // Scopes also surface whole safe directories (DerivedData, node_modules…).
-                let dirSpots = analyzer.hotspots.filter { scope.matches(info: analyzer.info(for: $0.node), node: $0.node) }
-                files = (dirSpots.map(\.node) + files).uniqued()
+            // Full-tree DFS is bounded (top-N heap) and cached: it re-runs only when
+            // the tree meaningfully changed, not on every keystroke.
+            let key = "\(scanGeneration)|\(progress.dirsScanned)|\(scope?.rawValue ?? "")|\(String(describing: phase))|\(freedThisSession)|\(undoStack.count)"
+            if key != flatCacheKey {
+                var files = root.largestFiles(limit: 2000)
+                if let scope, let analyzer {
+                    files = files.filter { scope.matches(info: analyzer.info(for: $0), node: $0) }
+                    // Scopes also surface whole safe directories (DerivedData, node_modules…).
+                    let dirSpots = analyzer.hotspots.filter { scope.matches(info: analyzer.info(for: $0.node), node: $0.node) }
+                    files = (dirSpots.map(\.node) + files).uniqued()
+                }
+                flatCache = Array(files.prefix(500))
+                flatCacheKey = key
             }
-            listing = Array(files.prefix(500))
+            listing = flatCache
         } else {
             guard let current = currentNode else { rows = []; return }
             listing = current.children
@@ -368,29 +390,46 @@ final class AppModel {
             filtered = filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
         }
 
-        let sorted = sortNodes(filtered)
+        // One info computation per node per refresh — comparators and row builders
+        // share it (computeStandalone walks paths; never call it inside a sort).
+        let now = Date().timeIntervalSince1970
+        var infoByID: [UInt64: ReclaimInfo] = [:]
+        infoByID.reserveCapacity(filtered.count + ghosts.count)
+        for node in filtered {
+            infoByID[node.id] = analyzer?.info(for: node) ?? ReclaimAnalyzer.computeStandalone(node: node, now: now)
+        }
+        for (ghost, _) in ghosts where infoByID[ghost.id] == nil {
+            infoByID[ghost.id] = analyzer?.info(for: ghost) ?? ReclaimAnalyzer.computeStandalone(node: ghost, now: now)
+        }
+
+        let sorted = sortNodes(filtered, infos: infoByID)
         let maxSize = max(sorted.map(\.allocatedSize).max() ?? 1, 1)
 
         var newRows: [Row] = []
         newRows.reserveCapacity(sorted.count + ghosts.count)
         for (ghost, _) in ghosts {
-            newRows.append(makeRow(ghost, maxSize: maxSize, isGhost: true))
+            newRows.append(makeRow(ghost, maxSize: maxSize, isGhost: true, info: infoByID[ghost.id]!))
         }
         for node in sorted {
-            newRows.append(makeRow(node, maxSize: maxSize, isGhost: false))
+            newRows.append(makeRow(node, maxSize: maxSize, isGhost: false, info: infoByID[node.id]!))
         }
         rows = newRows
+
         if resetCursor {
             cursor = 0
             selectedIDs = rows.isEmpty ? [] : [rows[0].id]
             selectionAnchor = nil
         } else {
-            cursor = min(cursor, max(0, rows.count - 1))
+            if let id = previousCursorID, let idx = rows.firstIndex(where: { $0.id == id }) {
+                cursor = idx
+            } else {
+                cursor = min(cursor, max(0, rows.count - 1))
+            }
+            selectionAnchor = previousAnchorID.flatMap { id in rows.firstIndex(where: { $0.id == id }) }
         }
     }
 
-    private func makeRow(_ node: FileNode, maxSize: Int64, isGhost: Bool) -> Row {
-        let info = analyzer?.info(for: node) ?? ReclaimAnalyzer.computeStandalone(node: node, now: Date().timeIntervalSince1970)
+    private func makeRow(_ node: FileNode, maxSize: Int64, isGhost: Bool, info: ReclaimInfo) -> Row {
         let alloc = node.allocatedSize
         let primary = sortMode == .reclaim && info.safeReclaimBytes > 0 ? info.safeReclaimBytes : alloc
         var suffix = ""
@@ -414,12 +453,12 @@ final class AppModel {
                    safeFraction: alloc > 0 ? Double(info.safeReclaimBytes) / Double(alloc) : 0)
     }
 
-    private func sortNodes(_ nodes: [FileNode]) -> [FileNode] {
+    private func sortNodes(_ nodes: [FileNode], infos: [UInt64: ReclaimInfo]) -> [FileNode] {
         let sorted: [FileNode]
         switch sortMode {
         case .reclaim:
-            if let analyzer {
-                sorted = nodes.sorted { analyzer.info(for: $0).score > analyzer.info(for: $1).score }
+            if analyzer != nil {
+                sorted = nodes.sorted { (infos[$0.id]?.score ?? 0) > (infos[$1.id]?.score ?? 0) }
             } else {
                 sorted = nodes.sorted { $0.allocatedSize > $1.allocatedSize }
             }
@@ -438,6 +477,16 @@ final class AppModel {
             sorted = nodes.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         }
         return sortReversed ? sorted.reversed() : sorted
+    }
+
+    /// True when the node itself or any ancestor has an id in the set.
+    private func hasAncestor(_ node: FileNode, in ids: Set<UInt64>) -> Bool {
+        var current: FileNode? = node
+        while let n = current {
+            if ids.contains(n.id) { return true }
+            current = n.parent
+        }
+        return false
     }
 
     private func isDescendant(_ node: FileNode, of ancestor: FileNode) -> Bool {
@@ -601,9 +650,18 @@ final class AppModel {
 
     // MARK: - Delete flow
 
-    func requestDelete() {
-        guard pendingDelete == nil, !isTrashing else { return }
-        let candidates = TrashEngine.minimalCover(of: deleteCandidates)
+    /// Builds and presents a delete plan. Pass `only:` to act on exactly one node
+    /// (context menu), bypassing marks and selection.
+    func requestDelete(only explicitNode: FileNode? = nil) {
+        guard pendingDelete == nil, !isTrashing, !isRestoring else { return }
+        // Mid-scan sizes are partial: the sheet would under-promise what actually
+        // gets trashed. Deletion unlocks once enumeration is complete.
+        guard phase == .done || phase == .analyzing else {
+            showToast("Still scanning — deletion unlocks when the scan finishes")
+            return
+        }
+        let baseCandidates = explicitNode.map { [$0] } ?? deleteCandidates
+        let candidates = TrashEngine.minimalCover(of: baseCandidates)
         guard !candidates.isEmpty else { return }
 
         var deletable: [FileNode] = []
@@ -660,16 +718,28 @@ final class AppModel {
         pendingDelete = nil
         isTrashing = true
         let items = plan.items
+        let generation = scanGeneration
+        // Anchor the whole tree for the duration: nodes hold `unowned` parents, so
+        // the tree must outlive any background path reconstruction.
+        let treeAnchor = root
         Task.detached(priority: .userInitiated) { [weak self] in
             let outcome = TrashEngine.trash(nodes: items)
             await MainActor.run { [weak self] in
-                self?.trashCompleted(outcome, items: items)
+                self?.trashCompleted(outcome, items: items, generation: generation)
+                _ = treeAnchor
             }
         }
     }
 
-    private func trashCompleted(_ outcome: TrashEngine.Outcome, items: [FileNode]) {
+    private func trashCompleted(_ outcome: TrashEngine.Outcome, items: [FileNode], generation: Int) {
         isTrashing = false
+        // A rescan happened mid-trash: the deletions are real, but the old tree is
+        // gone — report and leave the new scan's state untouched.
+        guard generation == scanGeneration else {
+            freedThisSession += outcome.bytesFreed
+            showToast("Moved \(outcome.successCount) item\(outcome.successCount == 1 ? "" : "s") to Trash (before rescan) — undo unavailable")
+            return
+        }
         var records: [TrashRecord] = []
         for result in outcome.results where result.succeeded {
             guard let node = items.first(where: { $0.path == result.path }),
@@ -685,23 +755,26 @@ final class AppModel {
             undoStack.append(records)
             freedThisSession += outcome.bytesFreed
         }
-        // If the current folder itself was trashed, walk up to a surviving ancestor.
-        if let current = currentNode, records.contains(where: { $0.node.id == current.id }) {
-            currentNode = current.parent ?? root
+        let trashedIDs = Set(records.map(\.node.id))
+        // Prune marks that live inside a trashed folder — they must not resurrect
+        // against a re-created path later.
+        marks = marks.filter { !hasAncestor($0.value, in: trashedIDs) }
+        // If the current folder (or an ancestor) was trashed, walk up to a survivor.
+        if let current = currentNode {
+            var node: FileNode? = current
+            while let n = node {
+                if trashedIDs.contains(n.id) {
+                    currentNode = n.parent ?? root
+                    break
+                }
+                node = n.parent
+            }
         }
         refreshRows(resetCursor: false)
         updateTruthScanned()
-        if let analyzer, let root {
-            let generation = scanGeneration
-            Task.detached(priority: .utility) { [weak self] in
-                analyzer.analyze(root: root)
-                await MainActor.run { [weak self] in
-                    guard let self, generation == self.scanGeneration else { return }
-                    self.refreshRows(resetCursor: false)
-                    self.updateTruthScanned()
-                }
-            }
-        }
+        // Re-analysis always runs on a FRESH analyzer and is published on the main
+        // actor — the live one is read by the UI and must never mutate off-main.
+        runAnalysis(generation: scanGeneration)
 
         let failures = outcome.failures
         if failures.isEmpty {
@@ -712,25 +785,37 @@ final class AppModel {
     }
 
     func undoLastTrash() {
+        guard !isRestoring else { return }        // one restore batch at a time — keep LIFO intact
         guard let batch = undoStack.popLast() else {
             showToast("Nothing to undo")
             return
         }
+        isRestoring = true
+        let generation = scanGeneration
+        let treeAnchor = root                     // keep unowned parents alive during the restore
         Task.detached(priority: .userInitiated) { [weak self] in
             var restored: [TrashRecord] = []
-            var failed = 0
+            var failedRecords: [TrashRecord] = []
             let fm = FileManager.default
             for record in batch {
                 do {
                     try fm.moveItem(at: record.trashURL, to: URL(fileURLWithPath: record.originalPath))
                     restored.append(record)
                 } catch {
-                    failed += 1
+                    failedRecords.append(record)
                 }
             }
-            let restoredFinal = restored, failedFinal = failed
+            let restoredFinal = restored, failedFinal = failedRecords
             await MainActor.run { [weak self] in
                 guard let self else { return }
+                self.isRestoring = false
+                guard generation == self.scanGeneration else {
+                    // Files are back on disk, but they belong to a replaced tree —
+                    // the running/new scan will pick them up.
+                    self.showToast("Restored \(restoredFinal.count) item\(restoredFinal.count == 1 ? "" : "s") — rescan to see them")
+                    _ = treeAnchor
+                    return
+                }
                 for record in restoredFinal {
                     if let parent = record.node.parent {
                         parent.appendChild(record.node)
@@ -740,10 +825,14 @@ final class AppModel {
                     }
                     self.freedThisSession -= record.bytes
                 }
+                if !failedFinal.isEmpty {
+                    self.undoStack.append(failedFinal)   // retryable after the user fixes the cause
+                }
                 self.refreshRows(resetCursor: false)
                 self.updateTruthScanned()
-                self.showToast(failedFinal == 0 ? "Restored \(restoredFinal.count) item\(restoredFinal.count == 1 ? "" : "s") from Trash"
-                                                : "Restored \(restoredFinal.count), \(failedFinal) failed")
+                self.showToast(failedFinal.isEmpty ? "Restored \(restoredFinal.count) item\(restoredFinal.count == 1 ? "" : "s") from Trash"
+                                                   : "Restored \(restoredFinal.count), \(failedFinal.count) failed — ⌘Z retries them")
+                _ = treeAnchor
             }
         }
     }
@@ -751,7 +840,10 @@ final class AppModel {
     // MARK: - Item actions
 
     func quickLook() {
-        let nodes = deleteCandidates
+        // Preview what's highlighted, not the pending delete set — marks gathered
+        // elsewhere must not hijack Space on the current row.
+        let selectedNodes = rows.filter { selectedIDs.contains($0.id) }.map(\.node)
+        let nodes = selectedNodes.isEmpty ? (cursorRow.map { [$0.node] } ?? []) : selectedNodes
         guard !nodes.isEmpty else { return }
         QuickLookController.shared.toggle(urls: nodes.map(\.url))
     }

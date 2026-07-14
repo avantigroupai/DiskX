@@ -3,9 +3,8 @@ import AppKit
 import DiskXCore
 
 struct MainWindowView: View {
-    let model: AppModel
+    @Bindable var model: AppModel
     @State private var keyMonitor: Any?
-    @State private var searchFocusToken = 0
 
     var body: some View {
         NavigationSplitView {
@@ -42,10 +41,8 @@ struct MainWindowView: View {
         }
         .animation(.spring(duration: 0.25), value: model.toast != nil)
         .animation(.spring(duration: 0.2), value: model.goalActive)
-        .sheet(isPresented: pendingDeleteBinding) {
-            if let plan = model.pendingDelete {
-                ConfirmSheet(model: model, plan: plan)
-            }
+        .sheet(item: $model.pendingDelete) { plan in
+            ConfirmSheet(model: model, plan: plan)
         }
         .onAppear {
             installKeyMonitor()
@@ -57,11 +54,6 @@ struct MainWindowView: View {
             if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
             keyMonitor = nil
         }
-    }
-
-    private var pendingDeleteBinding: Binding<Bool> {
-        Binding(get: { model.pendingDelete != nil },
-                set: { if !$0 { model.cancelDelete() } })
     }
 
     @ViewBuilder

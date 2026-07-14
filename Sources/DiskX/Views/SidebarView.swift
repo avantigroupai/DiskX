@@ -43,7 +43,11 @@ struct SidebarView: View {
             if let root = model.root {
                 VStack(spacing: 0) {
                     Divider()
-                    Text("\(Format.count(root.fileCount)) files · \(Format.bytes(root.allocatedSize))")
+                    // During a scan, read the observable progress struct — FileNode
+                    // counters aren't observable and would freeze the footer.
+                    Text(model.phase == .scanning
+                         ? "\(Format.count(model.progress.filesScanned)) files · \(Format.bytes(model.progress.bytesFound))"
+                         : "\(Format.count(root.fileCount)) files · \(Format.bytes(root.allocatedSize))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()

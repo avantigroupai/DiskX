@@ -58,12 +58,13 @@ struct TruthBarView: View {
         ]
     }
 
-    /// Denominator for proportional widths; falls back to the segment sum
-    /// before volume stats exist so the bar never divides by zero.
+    /// Denominator for proportional widths; falls back to the segment sum before
+    /// volume stats exist (never divides by zero) and normalizes when scanned bytes
+    /// exceed the volume total (e.g. residual double-counting) so no segment is
+    /// ever pushed off the clipped right edge.
     private var totalBytes: Int64 {
-        let t = model.truth.total
-        if t > 0 { return t }
-        return segments.reduce(Int64(0)) { $0 + $1.bytes }
+        let sum = segments.reduce(Int64(0)) { $0 + $1.bytes }
+        return max(model.truth.total, sum)
     }
 
     private func barSegments(totalWidth: CGFloat) -> [Segment] {

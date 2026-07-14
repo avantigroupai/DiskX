@@ -289,7 +289,8 @@ private struct FileRowView: View {
         Divider()
         Button("Move to Trash (⌫)") {
             model.moveCursorTo(index)
-            model.requestDelete()
+            // Scope to the clicked row — background marks must not ride along.
+            model.requestDelete(only: row.node)
         }
     }
 

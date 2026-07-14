@@ -20,7 +20,7 @@ extension AppModel {
         // Key codes for non-character keys.
         let kReturn: UInt16 = 36, kEscape: UInt16 = 53, kDelete: UInt16 = 51, kForwardDelete: UInt16 = 117
         let kUp: UInt16 = 126, kDown: UInt16 = 125, kLeft: UInt16 = 123, kRight: UInt16 = 124
-        let kHome: UInt16 = 115, kEnd: UInt16 = 119, kSpace: UInt16 = 49, kTab: UInt16 = 48
+        let kHome: UInt16 = 115, kEnd: UInt16 = 119, kSpace: UInt16 = 49
 
         // 1 — Confirm sheet: Return/Y confirm (Return inert when risky), Esc/N cancel.
         if let plan = pendingDelete {
@@ -50,10 +50,11 @@ extension AppModel {
             return false
         }
 
-        // 3 — Goal overlay: Return applies, Esc dismisses; typing passes through.
+        // 3 — Goal overlay: Return applies (overlay stays up to show the result),
+        // Esc dismisses; typing passes through. 76 = keypad Enter.
         if goalActive {
-            if code == kReturn { applyGoal(); goalActive = false; return true }
-            if code == kEscape { goalActive = false; goalResult = nil; return true }
+            if code == kReturn || code == 76 { applyGoal(); return true }
+            if code == kEscape { goalActive = false; return true }
             return false
         }
 
@@ -67,9 +68,13 @@ extension AppModel {
             return false
         }
 
-        // 5 — Command-key shortcuts handled by menus; only ⌘↑ here.
+        // 5 — Command keys: row-scoped ⌘↑/⌘A/⌘C here (text fields are already ruled
+        // out above, so the system Edit menu keeps working while editing); the rest
+        // fall through to the menu bar.
         if cmd {
             if code == kUp { ascend(); return true }
+            if key == "a" && !shift && !option { selectAll(); return true }
+            if key == "c" && !shift && !option { copyPath(); return true }
             return false
         }
 
@@ -91,14 +96,8 @@ extension AppModel {
             moveCursorTo(0); return true
         case code == kEnd:
             moveCursorTo(rows.count - 1); return true
-        case option && code == kUp:
-            moveCursor(-12, extending: shift); return true
-        case option && code == kDown:
-            moveCursor(12, extending: shift); return true
         case code == kSpace:
             quickLook(); return true
-        case code == kTab:
-            focusPane = focusPane == .list ? .map : .list; return true
         case key == "x" && shift:
             clearMarks(); return true
         case key == "x":

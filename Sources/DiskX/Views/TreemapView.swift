@@ -129,6 +129,10 @@ struct TreemapView: View {
             switch phase {
             case .active(let location):
                 if let tile = tileAt(location) {
+                    // Re-render only when the hovered tile changes or the pointer
+                    // moved noticeably — not on every mouse-move event.
+                    let moved = hover.map { hypot($0.location.x - location.x, $0.location.y - location.y) } ?? .infinity
+                    guard hover?.id != tile.id || moved > 24 else { return }
                     hover = HoverReadout(id: tile.id,
                                          name: tile.node.name,
                                          bytes: tile.node.allocatedSize,
