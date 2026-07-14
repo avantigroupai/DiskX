@@ -1,0 +1,161 @@
+import Foundation
+import os
+
+/// A node in the scanned file tree.
+///
+/// Thread-safety model: nodes are mutated concurrently by scanner workers.
+/// - `children` appends and `size` accumulation are guarded by `lock`.
+/// - After the scan finishes the tree is immutable and may be read freely.
+/// - During the scan the UI reads snapshots via the same lock (cheap, low contention).
+public final class FileNode: Identifiable, @unchecked Sendable {
+    public struct Flags: OptionSet, Sendable {
+        public let rawValue: UInt8
+        public init(rawValue: UInt8) { self.rawValue = rawValue }
+        public static let directory   = Flags(rawValue: 1 << 0)
+        public static let symlink     = Flags(rawValue: 1 << 1)
+        public static let inaccessible = Flags(rawValue: 1 << 2)   // permission denied while descending
+        public static let package     = Flags(rawValue: 1 << 3)   // .app / bundle directory
+        public static let hardlinkDup = Flags(rawValue: 1 << 4)   // size not counted (hard-link duplicate)
+    }
+
+    public let id: UInt64                 // unique per scan (monotonic counter)
+    public let name: String
+    public let flags: Flags
+    /// Unix timestamp (seconds since 1970); 0 when unknown.
+    public let modified: TimeInterval
+    /// Last access Unix timestamp; 0 when unknown.
+    public let accessed: TimeInterval
+    public unowned let parent: FileNode?
+
+    private let lock = OSAllocatedUnfairLock()
+    private var _children: [FileNode] = []
+    private var _allocatedSize: Int64 = 0
+    private var _logicalSize: Int64 = 0
+    private var _fileCount: Int64 = 0
+    private var _scanComplete: Bool = false
+
+    public init(id: UInt64,
+                name: String,
+                flags: Flags,
+                modified: TimeInterval = 0,
+                accessed: TimeInterval = 0,
+                parent: FileNode?,
+                allocatedSize: Int64 = 0,
+                logicalSize: Int64 = 0) {
+        self.id = id
+        self.name = name
+        self.flags = flags
+        self.modified = modified
+        self.accessed = accessed
+        self.parent = parent
+        self._allocatedSize = allocatedSize
+        self._logicalSize = logicalSize
+        self._fileCount = flags.contains(.directory) ? 0 : 1
+    }
+
+    public var isDirectory: Bool { flags.contains(.directory) }
+    public var isPackage: Bool { flags.contains(.package) }
+    public var isInaccessible: Bool { flags.contains(.inaccessible) }
+
+    /// Allocated (on-disk) size in bytes, aggregated for directories.
+    public var allocatedSize: Int64 { lock.withLock { _allocatedSize } }
+    /// Logical size in bytes, aggregated for directories.
+    public var logicalSize: Int64 { lock.withLock { _logicalSize } }
+    /// Number of regular files beneath (1 for a file).
+    public var fileCount: Int64 { lock.withLock { _fileCount } }
+    /// Directory finished enumerating all descendants.
+    public var scanComplete: Bool { lock.withLock { _scanComplete } }
+
+    public var children: [FileNode] { lock.withLock { _children } }
+
+    // MARK: - Scanner-side mutation
+
+    public func appendChild(_ node: FileNode) {
+        lock.withLock { _children.append(node) }
+    }
+
+    func markScanComplete() {
+        lock.withLock { _scanComplete = true }
+    }
+
+    /// Adds sizes to this node and every ancestor (called once per scanned batch, not per file).
+    public func propagateSizes(allocated: Int64, logical: Int64, files: Int64) {
+        var node: FileNode? = self
+        while let n = node {
+            n.lock.withLock {
+                n._allocatedSize += allocated
+                n._logicalSize += logical
+                n._fileCount += files
+            }
+            node = n.parent
+        }
+    }
+
+    /// Sorts children by allocated size descending, recursively. Call once after scan completes.
+    func sortBySizeRecursively() {
+        let kids = lock.withLock { _children }
+        let sorted = kids.sorted { $0.allocatedSize > $1.allocatedSize }
+        lock.withLock { _children = sorted }
+        for child in sorted where child.isDirectory {
+            child.sortBySizeRecursively()
+        }
+    }
+
+    /// Detaches this node after it was trashed: removes it from its parent and
+    /// subtracts its aggregate sizes from every ancestor.
+    public func detachFromTree() {
+        guard let parent else { return }
+        let (alloc, logical, files) = lock.withLock { (_allocatedSize, _logicalSize, _fileCount) }
+        parent.lock.withLock {
+            parent._children.removeAll { $0.id == self.id }
+        }
+        parent.propagateSizes(allocated: -alloc, logical: -logical, files: -files)
+    }
+
+    // MARK: - Paths
+
+    /// Reconstructs the absolute path by walking parents.
+    public var path: String {
+        var parts: [String] = []
+        var node: FileNode? = self
+        while let n = node {
+            parts.append(n.name)
+            node = n.parent
+        }
+        let joined = parts.reversed().joined(separator: "/")
+        return joined.hasPrefix("//") ? String(joined.dropFirst()) : joined
+    }
+
+    public var url: URL { URL(fileURLWithPath: path) }
+
+    /// Path components from the scan root down to this node (inclusive).
+    public var ancestryFromRoot: [FileNode] {
+        var chain: [FileNode] = []
+        var node: FileNode? = self
+        while let n = node {
+            chain.append(n)
+            node = n.parent
+        }
+        return chain.reversed()
+    }
+
+    /// Depth-first search for the biggest files under this node.
+    public func largestFiles(limit: Int) -> [FileNode] {
+        var files: [FileNode] = []
+        var stack: [FileNode] = [self]
+        while let node = stack.popLast() {
+            if node.isDirectory {
+                stack.append(contentsOf: node.children)
+            } else {
+                files.append(node)
+            }
+        }
+        files.sort { $0.allocatedSize > $1.allocatedSize }
+        return Array(files.prefix(limit))
+    }
+}
+
+extension FileNode: Hashable {
+    public static func == (lhs: FileNode, rhs: FileNode) -> Bool { lhs.id == rhs.id }
+    public func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
