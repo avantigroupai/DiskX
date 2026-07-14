@@ -94,8 +94,6 @@ struct TruthBarView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .frame(height: Self.stripHeight)
-        .background(.bar)
-        .overlay(alignment: .bottom) { Divider() }
     }
 
     // MARK: - Left: capacity bar + legend
@@ -197,10 +195,17 @@ struct TruthBarView: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
-                Text("Reclaimable now: ~\(Format.bytes(model.truth.scannedSafe)) safe")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .monospacedDigit()
+                // Never show "Zero KB safe" while the reclaim pass hasn't run yet.
+                if model.analyzer == nil && model.phase != .idle {
+                    Text("Reclaimable now: computing…")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Reclaimable now: ~\(Format.bytes(model.truth.scannedSafe)) safe")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .monospacedDigit()
+                }
             }
             Text("Freed this session: \(Format.bytes(model.freedThisSession))")
                 .font(.caption)

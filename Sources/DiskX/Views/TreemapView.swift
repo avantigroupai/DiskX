@@ -187,8 +187,7 @@ struct TreemapView: View {
         .padding(.vertical, 4)
         .frame(maxWidth: 320)
         .fixedSize()
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
+        .floatingGlassCapsule()
         .shadow(color: Color.black.opacity(0.15), radius: 4, y: 1)
     }
 

@@ -23,8 +23,11 @@ public enum Format {
         switch days {
         case ..<1: return "today"
         case ..<2: return "yesterday"
-        case ..<31: return "\(Int(days)) days ago"
-        case ..<365: return "\(Int(days / 30.44)) months ago"
+        case ..<31:
+            return "\(Int(days)) days ago"
+        case ..<365:
+            let months = max(1, Int(days / 30.44))
+            return months == 1 ? "1 month ago" : "\(months) months ago"
         default:
             let years = days / 365.25
             return years < 2 ? "1 year ago" : "\(Int(years)) years ago"

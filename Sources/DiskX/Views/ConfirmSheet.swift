@@ -134,18 +134,35 @@ struct ConfirmSheet: View {
                 Spacer()
                 if plan.risky {
                     // Risky: the destructive button loses prominence, Cancel gains it.
-                    Button("Cancel") { model.cancelDelete() }
-                        .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.cancelAction)
-                    Button("Move to Trash") { model.confirmDelete() }
-                        .buttonStyle(.bordered)
+                    if #available(macOS 26.0, *) {
+                        Button("Cancel") { model.cancelDelete() }
+                            .buttonStyle(.glassProminent)
+                            .keyboardShortcut(.cancelAction)
+                        Button("Move to Trash") { model.confirmDelete() }
+                            .buttonStyle(.glass)
+                    } else {
+                        Button("Cancel") { model.cancelDelete() }
+                            .buttonStyle(.borderedProminent)
+                            .keyboardShortcut(.cancelAction)
+                        Button("Move to Trash") { model.confirmDelete() }
+                            .buttonStyle(.bordered)
+                    }
                 } else {
-                    Button("Cancel") { model.cancelDelete() }
-                        .buttonStyle(.bordered)
-                        .keyboardShortcut(.cancelAction)
-                    Button("Move to Trash") { model.confirmDelete() }
-                        .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.defaultAction)
+                    if #available(macOS 26.0, *) {
+                        Button("Cancel") { model.cancelDelete() }
+                            .buttonStyle(.glass)
+                            .keyboardShortcut(.cancelAction)
+                        Button("Move to Trash") { model.confirmDelete() }
+                            .buttonStyle(.glassProminent)
+                            .keyboardShortcut(.defaultAction)
+                    } else {
+                        Button("Cancel") { model.cancelDelete() }
+                            .buttonStyle(.bordered)
+                            .keyboardShortcut(.cancelAction)
+                        Button("Move to Trash") { model.confirmDelete() }
+                            .buttonStyle(.borderedProminent)
+                            .keyboardShortcut(.defaultAction)
+                    }
                 }
             }
             .disabled(model.isTrashing)
@@ -239,7 +256,7 @@ struct ToastView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: Capsule())
+        .floatingGlassCapsule()
         .shadow(color: .black.opacity(0.15), radius: 8)
     }
 }

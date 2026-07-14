@@ -45,11 +45,7 @@ struct GoalOverlay: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
-        )
+        .floatingGlass(cornerRadius: 12, interactive: true)
         .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, 16)

@@ -21,8 +21,8 @@ struct FileListView: View {
             BreadcrumbBar(model: model)
             Divider()
             listBody
+                .padding(.horizontal, 6)   // breathing room inside the pane card
         }
-        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     @ViewBuilder

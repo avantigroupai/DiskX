@@ -21,8 +21,6 @@ struct StatusBarView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .frame(height: 26)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
     }
 
     // MARK: - Leading
@@ -66,6 +64,13 @@ struct StatusBarView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                    .lineLimit(1)
+                ProgressView()
+                    .controlSize(.small)
+            case .analyzing:
+                Text("Computing reclaim intelligence…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                 ProgressView()
                     .controlSize(.small)

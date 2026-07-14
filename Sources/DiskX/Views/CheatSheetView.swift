@@ -35,11 +35,7 @@ struct CheatSheetView: View {
         }
         .padding(24)
         .frame(maxWidth: 640)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
-        )
+        .floatingGlass(cornerRadius: 16)
         .shadow(color: .black.opacity(0.2), radius: 24, y: 8)
         .padding(32)
     }

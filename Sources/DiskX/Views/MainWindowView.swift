@@ -11,11 +11,15 @@ struct MainWindowView: View {
             SidebarView(model: model)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 300)
         } detail: {
-            VStack(spacing: 0) {
+            VStack(spacing: 10) {
                 TruthBarView(model: model)
+                    .floatingGlass(cornerRadius: 12)
                 contentPanes
                 StatusBarView(model: model)
+                    .floatingGlass(cornerRadius: 10)
             }
+            .padding(12)
+            .windowWash()
         }
         .frame(minWidth: 900, minHeight: 600)
         .toolbar { toolbarContent }
@@ -60,20 +64,27 @@ struct MainWindowView: View {
     private var contentPanes: some View {
         switch model.viewMode {
         case .both:
+            // Cards float with a 10pt gutter; the split divider lives in the gap.
             HSplitView {
                 FileListView(model: model)
+                    .paneCard()
                     .frame(minWidth: 360)
                     .layoutPriority(1)
+                    .padding(.trailing, 5)
                 TreemapView(model: model)
+                    .paneCard()
                     .frame(minWidth: 300)
+                    .padding(.leading, 5)
             }
         case .list:
             FileListView(model: model)
+                .paneCard()
         case .map:
             VStack(spacing: 0) {
                 FileListBreadcrumbOnly(model: model)
                 TreemapView(model: model)
             }
+            .paneCard()
         }
     }
 
@@ -174,7 +185,6 @@ struct FileListBreadcrumbOnly: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(.bar)
     }
 }
 
