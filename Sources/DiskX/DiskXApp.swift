@@ -10,6 +10,7 @@ struct DiskXApp: App {
             MainWindowView(model: model)
         }
         .windowToolbarStyle(.unified)
+        .defaultSize(width: 1200, height: 760)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Scan Folder…") { model.chooseFolder() }
@@ -58,6 +59,10 @@ struct DiskXApp: App {
                 Button("Keyboard Shortcuts") { model.cheatSheetVisible = true }
                     .keyboardShortcut("/", modifiers: [.command, .shift])
             }
+        }
+
+        Settings {
+            SettingsView(model: model)
         }
     }
 }

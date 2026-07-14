@@ -183,22 +183,38 @@ final class AppModel {
     var cheatSheetVisible = false
     var inspectorVisible = false
 
-    let scanTargets: [ScanTarget]
+    private(set) var scanTargets: [ScanTarget]
 
     init() {
-        var targets: [ScanTarget] = [
-            ScanTarget(name: "Home", path: NSHomeDirectory(), symbolName: "house"),
-            ScanTarget(name: "Downloads", path: NSHomeDirectory() + "/Downloads", symbolName: "arrow.down.circle"),
-            ScanTarget(name: "Applications", path: "/Applications", symbolName: "app"),
-            ScanTarget(name: "Macintosh HD", path: "/", symbolName: "internaldrive"),
-        ]
-        let volumes = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: [.volumeNameKey],
-                                                            options: [.skipHiddenVolumes]) ?? []
-        for vol in volumes where vol.path != "/" {
-            let name = (try? vol.resourceValues(forKeys: [.volumeNameKey]))?.volumeName ?? vol.lastPathComponent
-            targets.append(ScanTarget(name: name, path: vol.path, symbolName: "externaldrive"))
+        if AccessManager.isSandboxed {
+            // App Store build: only user-granted locations are scannable.
+            let granted = AccessManager.restoreGrantedURLs()
+            scanTargets = granted.map { url in
+                ScanTarget(name: url.lastPathComponent.isEmpty ? url.path : url.lastPathComponent,
+                           path: url.path, symbolName: "folder")
+            }
+            if let first = granted.first { scanTargetPath = first.path }
+        } else {
+            var targets: [ScanTarget] = [
+                ScanTarget(name: "Home", path: NSHomeDirectory(), symbolName: "house"),
+                ScanTarget(name: "Downloads", path: NSHomeDirectory() + "/Downloads", symbolName: "arrow.down.circle"),
+                ScanTarget(name: "Applications", path: "/Applications", symbolName: "app"),
+                ScanTarget(name: "Macintosh HD", path: "/", symbolName: "internaldrive"),
+            ]
+            let volumes = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: [.volumeNameKey],
+                                                                options: [.skipHiddenVolumes]) ?? []
+            for vol in volumes where vol.path != "/" {
+                let name = (try? vol.resourceValues(forKeys: [.volumeNameKey]))?.volumeName ?? vol.lastPathComponent
+                targets.append(ScanTarget(name: name, path: vol.path, symbolName: "externaldrive"))
+            }
+            scanTargets = targets
         }
-        scanTargets = targets
+    }
+
+    /// The location to scan automatically at launch; nil means show the welcome
+    /// screen and wait for the user (sandboxed first run).
+    var autoScanPath: String? {
+        AccessManager.isSandboxed ? scanTargets.first?.path : scanTargetPath
     }
 
     // MARK: - Scan lifecycle
@@ -871,7 +887,14 @@ final class AppModel {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.prompt = "Scan"
+        panel.message = "DiskX analyzes only locations you choose. Everything stays on this Mac."
         if panel.runModal() == .OK, let url = panel.url {
+            AccessManager.grant(url)
+            let name = url.lastPathComponent.isEmpty ? url.path : url.lastPathComponent
+            let target = ScanTarget(name: name, path: url.path, symbolName: "folder")
+            if !scanTargets.contains(where: { $0.path == target.path }) {
+                scanTargets.append(target)
+            }
             startScan(path: url.path)
         }
     }

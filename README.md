@@ -24,6 +24,40 @@ open DiskX.app
 
 Grant **Full Disk Access** (System Settings → Privacy & Security) to scan `~/Library` and system paths — DiskX shows an honest "unreadable" chip instead of silently undercounting.
 
+## App Store edition
+
+The Mac App Store build is sandboxed: DiskX scans only locations you grant via the
+folder picker (persisted as security-scoped bookmarks), starting from a welcome
+screen instead of an automatic Home scan. Ship checklist:
+
+1. **Apple Developer Program** membership; create an app record in App Store Connect
+   with the bundle id from [version.env](version.env).
+2. Certificates: `Apple Distribution` + `3rd Party Mac Developer Installer`; a Mac
+   App Store provisioning profile saved as `Entitlements/DiskX.provisionprofile`.
+3. Build the upload package:
+   ```bash
+   APP_IDENTITY="Apple Distribution: <Team>" \
+   INSTALLER_IDENTITY="3rd Party Mac Developer Installer: <Team>" \
+   Scripts/package_appstore.sh        # → DiskX-<version>.pkg
+   ```
+4. Upload with Transporter.app, then fill in screenshots/description/privacy
+   ("Data Not Collected" — the app has no telemetry).
+
+Already handled in-repo: App Sandbox entitlements
+([Entitlements/DiskX-AppStore.entitlements](Entitlements/DiskX-AppStore.entitlements)),
+privacy manifest with required-reason API declarations
+([PrivacyInfo.xcprivacy](Sources/DiskX/Resources/PrivacyInfo.xcprivacy)),
+app icon (Icon.icns), category/copyright/hi-res Info.plist metadata, and
+sandbox-aware scanning (`AccessManager`). Direct distribution (Developer ID +
+notarization, no sandbox) keeps full-disk scanning; see the skill scripts
+`sign-and-notarize.sh` for that path.
+
+## Appearance
+
+Light, dark, and system themes — Settings (⌘,) → Appearance. All UI uses semantic
+colors and Liquid Glass (macOS 26+) with material fallbacks, so both modes are
+first-class.
+
 ## Architecture
 
 | Target | Contents |

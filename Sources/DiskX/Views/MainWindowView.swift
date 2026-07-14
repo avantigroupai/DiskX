@@ -11,15 +11,19 @@ struct MainWindowView: View {
             SidebarView(model: model)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 300)
         } detail: {
-            VStack(spacing: 10) {
-                TruthBarView(model: model)
-                    .floatingGlass(cornerRadius: 12)
-                contentPanes
-                StatusBarView(model: model)
-                    .floatingGlass(cornerRadius: 10)
+            if model.root == nil && (model.phase == .idle || isFailed) {
+                WelcomeView(model: model)
+            } else {
+                VStack(spacing: 10) {
+                    TruthBarView(model: model)
+                        .floatingGlass(cornerRadius: 12)
+                    contentPanes
+                    StatusBarView(model: model)
+                        .floatingGlass(cornerRadius: 10)
+                }
+                .padding(12)
+                .windowWash()
             }
-            .padding(12)
-            .windowWash()
         }
         .frame(minWidth: 900, minHeight: 600)
         .toolbar { toolbarContent }
@@ -50,14 +54,20 @@ struct MainWindowView: View {
         }
         .onAppear {
             installKeyMonitor()
-            if model.phase == .idle {
-                model.startScan(path: model.scanTargetPath)
+            (AppTheme(rawValue: UserDefaults.standard.string(forKey: AppTheme.storageKey) ?? "") ?? .system).apply()
+            if model.phase == .idle, let path = model.autoScanPath {
+                model.startScan(path: path)
             }
         }
         .onDisappear {
             if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
             keyMonitor = nil
         }
+    }
+
+    private var isFailed: Bool {
+        if case .failed = model.phase { return true }
+        return false
     }
 
     @ViewBuilder
