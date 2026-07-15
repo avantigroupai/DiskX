@@ -2,6 +2,8 @@
 
 **The WizTree-fast, ncdu-friendly disk visualizer macOS never shipped.**
 
+![DiskX — Reclaim Sort, ghost-row hoisting, Truth Bar, and the live treemap after scanning 1.5M files in 27 seconds](docs/screenshot.png)
+
 Every existing analyzer sorts by raw size, which puts `/System` and your Photos Library — the things you cannot or should not touch — at the top, while the 40 GB of Xcode caches you could delete right now sits three levels deep. DiskX's default ordering answers the question users actually ask: **"What should I delete first?"**
 
 ## Highlights
@@ -66,4 +68,51 @@ first-class.
 | `DiskX` | SwiftUI app: `AppModel` (single brain), global `KeyboardDispatch`, views |
 | `diskx-bench` | CLI scan benchmark |
 
-Built with a multi-agent AI orchestration pipeline: research fan-out → judge-panel design synthesis → parallel module implementation → adversarial review.
+## How it was built — the AI orchestration pipeline
+
+DiskX was developed end-to-end in one session by a multi-agent orchestration
+framework: three deterministic workflows fanning out **48 specialized agents**
+(~3.3M tokens), coordinated by a main loop that owned the architecture,
+integration, and verification.
+
+```mermaid
+flowchart LR
+    subgraph W1["Workflow 1 — Research & Design (9 agents)"]
+        R1["4 pain-point researchers<br/>(Disk Inventory X, DaisyDisk,<br/>WizTree/ncdu, user wishes)"] --> J
+        R2["1 macOS tech researcher<br/>(getattrlistbulk, APFS, sandbox)"] --> J
+        C["3 UX concept designers<br/>novice-first · keyboard-first ·<br/>visualization-innovation"] --> J
+        J["Judge panel:<br/>scores concepts, synthesizes<br/>DESIGN-SPEC.md"]
+    end
+    subgraph M["Main loop (inline)"]
+        A["Engine + AppModel contracts<br/>scanner · treemap · trash · analyzer"]
+    end
+    subgraph W2["Workflow 2 — Implementation (6 agents, parallel)"]
+        I["file list · treemap · truth bar ·<br/>confirm sheet · chrome · QuickLook<br/>— disjoint files vs pinned API"]
+    end
+    subgraph W3["Workflow 3 — Adversarial Review (33 agents)"]
+        F["5 dimension finders:<br/>deletion safety · scanner ABI ·<br/>concurrency · keyboard UX · perf"] --> V
+        V["28 independent skeptic verifiers<br/>(one per finding, briefed to refute)"]
+    end
+    W1 --> M --> W2 --> W3 --> X["Main loop: fix all 28<br/>confirmed findings, package,<br/>benchmark, ship"]
+```
+
+1. **Research & design** — five researchers swept reviews, Reddit, and HN in
+   parallel for the pain points of every existing disk analyzer (22 tool
+   findings, 59 explicit user wishes), while a tech agent mapped the fastest
+   scanning APIs. Three designers then produced competing concepts from
+   different angles, and a judge agent scored them and synthesized the final
+   [design spec](docs/DESIGN-SPEC.md) — the origin of Reclaim Sort, the Truth
+   Bar, ghost-row hoisting, and risk-proportional deletion.
+2. **Parallel implementation** — the main loop first wrote the core engine and
+   pinned the `AppModel` API as a contract, then six agents implemented the
+   SwiftUI modules concurrently, each owning disjoint files and verifying its
+   own diagnostics. Integration and build fixes stayed in the main loop.
+3. **Adversarial review** — five finder agents attacked orthogonal dimensions;
+   every single finding was handed to an independent verifier instructed to
+   *refute* it. 28 findings survived (0 refuted) — including six criticals like
+   firmlink double-counting and a cursor/selection desync — and all 28 were
+   fixed and re-verified before packaging.
+
+The engine was additionally validated headlessly: 13 unit/integration tests
+(including a real Trash round-trip) and a benchmark scanning 1.31M files in
+62s cold — 1.7× faster than `du` on the same tree.
