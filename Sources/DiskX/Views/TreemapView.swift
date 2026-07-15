@@ -273,11 +273,13 @@ struct TreemapView: View {
 
             var subTiles: [TreemapTile] = []
             if node.isDirectory, placement.rect.width > 120, placement.rect.height > 80 {
-                var inner = placement.rect.insetBy(dx: 2, dy: 2)
+                // Generous margins: sub-tiles never touch their parent's edges.
+                var inner = placement.rect.insetBy(dx: 11, dy: 11)
                 if placement.rect.width > 60 {
-                    // Reserve a 14pt band at the top for the directory label.
-                    inner.origin.y += 14
-                    inner.size.height -= 14
+                    // Reserve a band at the top for the directory label, with real
+                    // breathing room above and below the text.
+                    inner.origin.y += 22
+                    inner.size.height -= 22
                 }
                 if inner.width > 4, inner.height > 4 {
                     let subChildren = node.children
@@ -343,12 +345,12 @@ struct TreemapView: View {
     private static func drawLabel(_ context: GraphicsContext, tile: TreemapTile) {
         let rect = tile.rect
         if tile.hasLabelBand {
-            guard rect.width > 60 else { return }
-            let band = CGRect(x: rect.minX + 5, y: rect.minY + 2, width: rect.width - 10, height: 12)
+            guard rect.width > 76 else { return }
+            let band = CGRect(x: rect.minX + 14, y: rect.minY + 9, width: rect.width - 28, height: 14)
             guard band.width > 8 else { return }
             var layer = context
-            layer.clip(to: Path(CGRect(x: rect.minX + 2, y: rect.minY + 1,
-                                       width: rect.width - 4, height: 14)))
+            layer.clip(to: Path(CGRect(x: rect.minX + 3, y: rect.minY + 3,
+                                       width: rect.width - 6, height: 26)))
             let name = layer.resolve(
                 Text(tile.node.name)
                     .font(.system(size: 10, weight: .semibold))
@@ -363,8 +365,9 @@ struct TreemapView: View {
                 layer.draw(bytes, at: CGPoint(x: band.maxX, y: band.midY), anchor: .trailing)
             }
         } else {
-            guard rect.width > 70, rect.height > 24 else { return }
-            let inner = rect.insetBy(dx: 5, dy: 4)
+            // Labels only when there's room for real padding — never flush text.
+            guard rect.width > 96, rect.height > 34 else { return }
+            let inner = rect.insetBy(dx: 13, dy: 10)
             guard inner.width > 8, inner.height > 8 else { return }
             var layer = context
             layer.clip(to: Path(inner))
@@ -376,9 +379,9 @@ struct TreemapView: View {
                 Text(Format.bytes(tile.node.allocatedSize))
                     .font(.system(size: 10).monospacedDigit())
                     .foregroundStyle(Color.primary.opacity(0.55)))
-            if inner.height >= 26 {
+            if inner.height >= 28 {
                 layer.draw(name, at: CGPoint(x: inner.minX, y: inner.minY), anchor: .topLeading)
-                layer.draw(bytes, at: CGPoint(x: inner.minX, y: inner.minY + 13), anchor: .topLeading)
+                layer.draw(bytes, at: CGPoint(x: inner.minX, y: inner.minY + 15), anchor: .topLeading)
             } else {
                 layer.draw(name, at: CGPoint(x: inner.minX, y: inner.midY), anchor: .leading)
                 let bounds = CGSize(width: CGFloat.greatestFiniteMagnitude, height: inner.height)

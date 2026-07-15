@@ -97,14 +97,67 @@ public enum FileCategory: String, CaseIterable, Sendable {
         "/system/", "/usr/", "/bin/", "/sbin/", "/private/var/db/", "/library/apple/",
     ]
 
+    /// True when a directory of this category makes every descendant the same
+    /// category (a file inside node_modules is a build artifact, full stop).
+    public var inheritsToChildren: Bool {
+        switch self {
+        case .cache, .buildArtifact, .trash, .application, .system, .backup, .log:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static let backupDirNames: Set<String> = ["backups.backupdb", "mobilesync"]
+
+    /// O(1) per-node classification for the analyzer's tree walk: name/extension
+    /// table lookups plus the parent's inherited context — never scans the path.
+    /// Semantically equivalent to `classify` for nodes deeper than the shallow
+    /// levels (where the analyzer still uses the full version).
+    public static func classifyFast(name: String, isDirectory: Bool, inherited: FileCategory?) -> FileCategory {
+        if let inherited, inherited.inheritsToChildren {
+            return inherited
+        }
+        let lowerName = name.lowercased()
+        if isDirectory {
+            if buildArtifactDirNames.contains(lowerName) { return .buildArtifact }
+            if lowerName == "caches" || lowerName == "cache" { return .cache }
+            if lowerName == ".trash" { return .trash }
+            if lowerName == "logs" { return .log }
+            if backupDirNames.contains(lowerName) { return .backup }
+            if lowerName.hasSuffix(".app") { return .application }
+            if lowerName.hasSuffix(".photoslibrary") || lowerName.hasSuffix(".musiclibrary") { return .media }
+            return .other
+        }
+        let ext = (lowerName as NSString).pathExtension
+        if !ext.isEmpty {
+            if mediaExtensions.contains(ext) { return .media }
+            if documentExtensions.contains(ext) { return .document }
+            if installerExtensions.contains(ext) { return .installer }
+            if logExtensions.contains(ext) { return .log }
+            if backupExtensions.contains(ext) { return .backup }
+            if codeExtensions.contains(ext) { return .code }
+        }
+        return .other
+    }
+
+    /// Precomputed "/name/" markers — interpolating them per call was a hot spot.
+    private static let buildArtifactPathMarkers: [String] = buildArtifactDirNames.map { "/\($0)/" }
+
+    /// Locale-independent substring check; Foundation's default `contains` does
+    /// Unicode normalization and is far too slow for per-node use.
+    private static func literallyContains(_ haystack: String, _ needle: String) -> Bool {
+        haystack.range(of: needle, options: .literal) != nil
+    }
+
     /// Classify a node by name, extension, and full path (lowercased internally).
     public static func classify(name: String, path: String, isDirectory: Bool) -> FileCategory {
         let lowerName = name.lowercased()
         let lowerPath = path.lowercased()
 
-        if lowerPath.contains("/.trash/") || lowerName == ".trash" { return .trash }
+        if literallyContains(lowerPath, "/.trash/") || lowerName == ".trash" { return .trash }
 
-        for marker in cachePathMarkers where lowerPath.contains(marker) { return .cache }
+        for marker in cachePathMarkers where literallyContains(lowerPath, marker) { return .cache }
         if lowerName == "caches" && isDirectory { return .cache }
 
         if isDirectory {
@@ -114,13 +167,13 @@ public enum FileCategory: String, CaseIterable, Sendable {
         }
 
         // Inherited context: anything inside a build-artifact dir is a build artifact.
-        for dirName in buildArtifactDirNames {
-            if lowerPath.contains("/\(dirName)/") { return .buildArtifact }
-        }
-        if lowerPath.contains("/deriveddata/") || lowerPath.contains("/xcode/ios devicesupport/") {
+        for marker in buildArtifactPathMarkers where literallyContains(lowerPath, marker) {
             return .buildArtifact
         }
-        if lowerPath.contains(".app/") { return .application }
+        if literallyContains(lowerPath, "/deriveddata/") || literallyContains(lowerPath, "/xcode/ios devicesupport/") {
+            return .buildArtifact
+        }
+        if literallyContains(lowerPath, ".app/") { return .application }
 
         for prefix in systemPathPrefixes where lowerPath.hasPrefix(prefix) { return .system }
 
@@ -133,8 +186,8 @@ public enum FileCategory: String, CaseIterable, Sendable {
             if backupExtensions.contains(ext) { return .backup }
             if codeExtensions.contains(ext) { return .code }
         }
-        if lowerPath.contains("/library/logs/") || lowerPath.contains("/var/log/") { return .log }
-        if lowerPath.contains("/backups.backupdb/") || lowerPath.contains("/mobilesync/backup/") { return .backup }
+        if literallyContains(lowerPath, "/library/logs/") || literallyContains(lowerPath, "/var/log/") { return .log }
+        if literallyContains(lowerPath, "/backups.backupdb/") || literallyContains(lowerPath, "/mobilesync/backup/") { return .backup }
         return .other
     }
 }

@@ -123,12 +123,24 @@ public final class ReclaimAnalyzer: @unchecked Sendable {
         infoMap.reserveCapacity(4096)
         var spots: [Hotspot] = []
 
+        // Shallow nodes (few hundred) get the full path-based classification so
+        // system prefixes and path markers are honored; everything deeper runs the
+        // O(1) inherited-context classifier — full-path scans over millions of
+        // nodes made this pass take minutes.
+        let shallowDepthLimit = 2
+
         @discardableResult
-        func visit(_ node: FileNode, path: String, depth: Int) -> (score: Double, safe: Int64) {
+        func visit(_ node: FileNode, path: String, depth: Int, inherited: FileCategory?) -> (score: Double, safe: Int64) {
             let isDir = node.isDirectory
-            let category = FileCategory.classify(name: node.name, path: path, isDirectory: isDir)
+            let category: FileCategory
+            if depth <= shallowDepthLimit {
+                category = FileCategory.classify(name: node.name, path: path, isDirectory: isDir)
+            } else {
+                category = FileCategory.classifyFast(name: node.name, isDirectory: isDir, inherited: inherited)
+            }
             let ageDays = node.modified > 0 ? (now - max(node.modified, node.accessed)) / 86_400 : 0
-            let tier = tier(for: category, path: path, isDirectory: isDir, ageDays: ageDays)
+            let tier = tier(for: category, path: depth <= shallowDepthLimit ? path : "",
+                            isDirectory: isDir, ageDays: ageDays)
             let staleness = Self.staleness(now: now, modified: node.modified, accessed: node.accessed)
 
             var info = ReclaimInfo(category: category, tier: tier, stalenessMultiplier: staleness)
@@ -145,9 +157,13 @@ public final class ReclaimAnalyzer: @unchecked Sendable {
                         spots.append(Hotspot(node: node, depth: depth, score: info.score))
                     }
                 } else {
+                    let childInherited = category.inheritsToChildren ? category : nil
                     for child in node.children {
-                        let childPath = path == "/" ? "/" + child.name : path + "/" + child.name
-                        let r = visit(child, path: childPath, depth: depth + 1)
+                        // Path strings are only needed while the full classifier runs.
+                        let childPath = depth < shallowDepthLimit
+                            ? (path == "/" ? "/" + child.name : path + "/" + child.name)
+                            : ""
+                        let r = visit(child, path: childPath, depth: depth + 1, inherited: childInherited)
                         childScore += r.score
                         childSafe += r.safe
                     }
@@ -166,7 +182,7 @@ public final class ReclaimAnalyzer: @unchecked Sendable {
             return (info.score, info.safeReclaimBytes)
         }
 
-        let result = visit(root, path: root.path, depth: 0)
+        let result = visit(root, path: root.path, depth: 0, inherited: nil)
         spots.sort { $0.score > $1.score }
         infos = infoMap
         hotspots = Array(spots.prefix(64))

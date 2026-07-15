@@ -2,7 +2,7 @@
 
 **The WizTree-fast, ncdu-friendly disk visualizer macOS never shipped.**
 
-![DiskX — Reclaim Sort, ghost-row hoisting, Truth Bar, and the live treemap after scanning 1.5M files in 27 seconds](docs/screenshot.png)
+![DiskX — Reclaim Sort, ghost-row hoisting, Truth Bar, and the synchronized treemap after scanning 1.52M files in 41.5 seconds](docs/screenshot.png)
 
 Every existing analyzer sorts by raw size, which puts `/System` and your Photos Library — the things you cannot or should not touch — at the top, while the 40 GB of Xcode caches you could delete right now sits three levels deep. DiskX's default ordering answers the question users actually ask: **"What should I delete first?"**
 
@@ -113,6 +113,7 @@ flowchart LR
    firmlink double-counting and a cursor/selection desync — and all 28 were
    fixed and re-verified before packaging.
 
-The engine was additionally validated headlessly: 13 unit/integration tests
-(including a real Trash round-trip) and a benchmark scanning 1.31M files in
-62s cold — 1.7× faster than `du` on the same tree.
+The engine was additionally validated headlessly: 14 unit/integration tests
+(including a real Trash round-trip) and a benchmark scanning **1.33M files in
+45s (~29,000 files/sec) — 2.4× faster than `du`** on the same tree, with the
+reclaim analysis over the whole tree taking a further 1.2s.

@@ -17,7 +17,7 @@ struct StatusBarView: View {
                 Spacer(minLength: 8)
                 trailing
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 14)
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .frame(height: 26)

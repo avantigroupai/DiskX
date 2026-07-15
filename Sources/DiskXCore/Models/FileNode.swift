@@ -16,6 +16,7 @@ public final class FileNode: Identifiable, @unchecked Sendable {
         public static let inaccessible = Flags(rawValue: 1 << 2)   // permission denied while descending
         public static let package     = Flags(rawValue: 1 << 3)   // .app / bundle directory
         public static let hardlinkDup = Flags(rawValue: 1 << 4)   // size not counted (hard-link duplicate)
+        public static let cloudDataless = Flags(rawValue: 1 << 5) // placeholder; content lives in the cloud
     }
 
     public let id: UInt64                 // unique per scan (monotonic counter)

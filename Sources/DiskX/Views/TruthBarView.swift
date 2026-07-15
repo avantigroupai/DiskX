@@ -16,9 +16,9 @@ struct TruthBarView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let stripHeight: CGFloat = 48
+    private static let stripHeight: CGFloat = 72
     private static let barHeight: CGFloat = 20
-    private static let horizontalPadding: CGFloat = 12
+    private static let horizontalPadding: CGFloat = 22
 
     // MARK: - Segments
 
@@ -99,7 +99,7 @@ struct TruthBarView: View {
     // MARK: - Left: capacity bar + legend
 
     private var capacitySection: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 6) {
             capacityBar
             legend
         }
@@ -190,7 +190,7 @@ struct TruthBarView: View {
     // MARK: - Right: reclaim headline, session counter, FDA chip
 
     private var reclaimSection: some View {
-        VStack(alignment: .trailing, spacing: 2) {
+        VStack(alignment: .trailing, spacing: 4) {
             HStack(spacing: 5) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 11, weight: .medium))

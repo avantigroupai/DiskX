@@ -155,4 +155,26 @@ final class CategoryTests: XCTestCase {
         XCTAssertEqual(FileCategory.classify(name: "node_modules", path: "/users/x/proj/node_modules", isDirectory: true), .buildArtifact)
         XCTAssertEqual(FileCategory.classify(name: "system.log", path: "/private/var/log/system.log", isDirectory: false), .log)
     }
+
+    /// The analyzer's hot path uses classifyFast with inherited context instead of
+    /// scanning the full path. It must agree with the full classifier for the cases
+    /// that matter.
+    func testFastClassifierInheritsContext() {
+        // A file deep inside node_modules inherits buildArtifact without a path scan.
+        XCTAssertEqual(FileCategory.classifyFast(name: "chunk.js", isDirectory: false, inherited: .buildArtifact), .buildArtifact)
+        XCTAssertEqual(FileCategory.classifyFast(name: "blob.bin", isDirectory: false, inherited: .cache), .cache)
+        // Directory names still classify without inheritance.
+        XCTAssertEqual(FileCategory.classifyFast(name: "node_modules", isDirectory: true, inherited: nil), .buildArtifact)
+        XCTAssertEqual(FileCategory.classifyFast(name: "Caches", isDirectory: true, inherited: nil), .cache)
+        // Extensions classify by name alone.
+        XCTAssertEqual(FileCategory.classifyFast(name: "movie.mkv", isDirectory: false, inherited: nil), .media)
+        XCTAssertEqual(FileCategory.classifyFast(name: "Xcode.dmg", isDirectory: false, inherited: nil), .installer)
+        // Non-inheriting parents (media/document/other) don't drag children along.
+        XCTAssertEqual(FileCategory.classifyFast(name: "notes.txt", isDirectory: false, inherited: .media), .document)
+        // Inheriting categories are marked as such; leaf categories are not.
+        XCTAssertTrue(FileCategory.buildArtifact.inheritsToChildren)
+        XCTAssertTrue(FileCategory.cache.inheritsToChildren)
+        XCTAssertFalse(FileCategory.media.inheritsToChildren)
+        XCTAssertFalse(FileCategory.document.inheritsToChildren)
+    }
 }

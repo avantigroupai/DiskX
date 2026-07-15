@@ -49,7 +49,10 @@ public final class ScanSession: @unchecked Sendable {
     private static let CMN_OBJTYPE: UInt32 = 0x0000_0008
     private static let CMN_MODTIME: UInt32 = 0x0000_0400
     private static let CMN_ACCTIME: UInt32 = 0x0000_1000
+    private static let CMN_FLAGS: UInt32 = 0x0004_0000
     private static let CMN_FILEID: UInt32 = 0x0200_0000
+    /// st_flags bit: dataless placeholder (content held by a file provider).
+    private static let SF_DATALESS_FLAG: UInt32 = 0x4000_0000
     private static let FILE_LINKCOUNT: UInt32 = 0x0000_0001
     private static let FILE_TOTALSIZE: UInt32 = 0x0000_0002
     private static let FILE_ALLOCSIZE: UInt32 = 0x0000_0004
@@ -119,7 +122,16 @@ public final class ScanSession: @unchecked Sendable {
         cond.unlock()
     }
 
+    /// Process-wide: never trigger iCloud/File-Provider downloads while scanning.
+    /// Without this, open(2) on a dataless directory (e.g. ~/Library/CloudStorage)
+    /// blocks until the provider materializes it — potentially forever.
+    /// IOPOL_TYPE_VFS_MATERIALIZE_DATALESS_FILES=3, IOPOL_SCOPE_PROCESS=0, OFF=1.
+    private static let datalessPolicyApplied: Bool = {
+        setiopolicy_np(3, 0, 1) == 0
+    }()
+
     public func start() {
+        _ = Self.datalessPolicyApplied
         // Probe with open(2), not just lstat: an unreadable root must fail loudly
         // instead of completing as an empty "success".
         let probeFD = open(rootPath, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
@@ -202,10 +214,21 @@ public final class ScanSession: @unchecked Sendable {
         cond.unlock()
     }
 
+    /// DISKX_TRACE=1 logs every directory before open(2) — the tail of the log
+    /// identifies directories whose filesystem blocks the scan.
+    private static let traceEnabled = ProcessInfo.processInfo.environment["DISKX_TRACE"] != nil
+
     private func processDirectory(_ job: Job, buffer: UnsafeMutableRawPointer, bufSize: Int) {
-        let fd = open(job.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        if Self.traceEnabled, let data = (job.path + "\n").data(using: .utf8) {
+            FileHandle.standardError.write(data)
+        }
+        // O_NONBLOCK is the guard against a hung scan: opening a directory that
+        // sits on a stalled provider/synthetic mount would otherwise block this
+        // worker forever, so `outstanding` never reaches 0 and the scan never
+        // finishes. Non-blocking returns immediately (EAGAIN/ENOTSUP) instead.
+        let fd = open(job.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_NONBLOCK)
         guard fd >= 0 else {
-            if errno == EACCES || errno == EPERM {
+            if errno == EACCES || errno == EPERM || errno == EAGAIN || errno == ENOTSUP {
                 progressLock.withLock { $0.deniedDirs += 1 }
             }
             job.node.markScanComplete()
@@ -216,7 +239,7 @@ public final class ScanSession: @unchecked Sendable {
         var attrs = attrlist()
         attrs.bitmapcount = u_short(ATTR_BIT_MAP_COUNT)
         attrs.commonattr = Self.CMN_RETURNED_ATTRS | Self.CMN_ERROR | Self.CMN_NAME | Self.CMN_DEVID
-            | Self.CMN_OBJTYPE | Self.CMN_MODTIME | Self.CMN_ACCTIME | Self.CMN_FILEID
+            | Self.CMN_OBJTYPE | Self.CMN_MODTIME | Self.CMN_ACCTIME | Self.CMN_FLAGS | Self.CMN_FILEID
         attrs.fileattr = Self.FILE_LINKCOUNT | Self.FILE_TOTALSIZE | Self.FILE_ALLOCSIZE
 
         var newJobs: [Job] = []
@@ -275,6 +298,12 @@ public final class ScanSession: @unchecked Sendable {
                     p = p.advanced(by: 16)
                 }
 
+                var stFlags: UInt32 = 0
+                if retCommon & Self.CMN_FLAGS != 0 {
+                    stFlags = p.loadUnaligned(as: UInt32.self)
+                    p = p.advanced(by: 4)
+                }
+
                 var fileID: UInt64 = 0
                 if retCommon & Self.CMN_FILEID != 0 {
                     fileID = p.loadUnaligned(as: UInt64.self)
@@ -309,10 +338,15 @@ public final class ScanSession: @unchecked Sendable {
                     if !ext.isEmpty && Self.packageExtensions.contains(ext) {
                         flags.insert(.package)
                     }
+                    // Dataless directories (iCloud/Dropbox/OneDrive placeholders)
+                    // are never descended into: even with the materialize-off
+                    // policy, a wedged provider can block open(2) forever.
+                    let isDataless = stFlags & Self.SF_DATALESS_FLAG != 0
+                    if isDataless { flags.insert(.cloudDataless) }
                     let child = FileNode(id: nextID(), name: name, flags: flags,
                                          modified: modified, accessed: accessed, parent: job.node)
                     job.node.appendChild(child)
-                    if !Self.systemSkipPaths.contains(childPath) {
+                    if !isDataless && !Self.systemSkipPaths.contains(childPath) {
                         newJobs.append(Job(node: child, path: childPath))
                     } else {
                         child.markScanComplete()
