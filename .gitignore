@@ -1,0 +1,13 @@
+# Build products
+.build/
+.swiftpm/
+DiskX.app/
+*.pkg
+*.icns.tmp
+DerivedData/
+
+# macOS
+.DS_Store
+
+# Signing material — never commit
+Entitlements/*.provisionprofile
