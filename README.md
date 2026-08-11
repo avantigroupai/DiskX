@@ -18,12 +18,21 @@ Every existing analyzer sorts by raw size, which puts `/System` and your Photos 
 
 ## Download
 
-**[⬇ Download DiskX 1.0.1 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
+**[⬇ Download DiskX 1.0.2 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
 
-Signed with a Developer ID certificate and **notarized by Apple**, so it just
-opens — no right-click → Open detour, no Privacy & Security panel, no
-`xattr` incantation. Both the app and the DMG carry stapled notarization
-tickets, so the first launch works offline too.
+1.0.2 is a **security release**: it fixes a reproducible crash that let any scanned
+folder abort the app, and hardens the deletion path. Update from 1.0.0/1.0.1.
+
+It is signed with a Developer ID certificate but — unlike 1.0.1 — **not yet
+notarized**, so macOS quarantines it on first launch. Open it once with
+**right-click → Open → Open**, or clear the flag:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/DiskX.app
+```
+
+A notarized build will follow; the security fixes were considered more urgent
+than waiting on notarization credentials.
 
 Prefer to build it yourself? See [Build & run](#build--run) — it takes about ten seconds.
 
