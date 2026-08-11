@@ -1,10 +1,34 @@
-# DiskX
+# DiskX — macOS disk space analyzer & disk explorer
 
 **The WizTree-fast, ncdu-friendly disk visualizer macOS never shipped.**
+A free, open-source **disk space analyzer for Mac** that shows what's eating your
+storage — and, unlike every other **disk usage analyzer**, tells you what's
+actually safe to delete first.
 
-![DiskX — Reclaim Sort, ghost-row hoisting, Truth Bar, and the synchronized treemap after scanning 1.52M files in 41.5 seconds](docs/screenshot.png)
+![DiskX showing Reclaim Sort with ghost-row hoisting, plain-language WHY lines, the Truth Bar capacity strip, and a synchronized squarified treemap](docs/screenshot.png)
+
+If you've ever searched *"what is taking up space on my Mac"*, *"how to free up
+disk space on macOS"*, *"what is System Data"*, or *"find large files Mac"* — this
+is the tool that answers it in one screen. DiskX is a native Swift/SwiftUI
+**storage analyzer, disk explorer and disk cleaner** for macOS 14+ (Apple Silicon
+and Intel), combining a **treemap visualization**, a keyboard-driven file browser,
+and safe one-keystroke deletion.
 
 Every existing analyzer sorts by raw size, which puts `/System` and your Photos Library — the things you cannot or should not touch — at the top, while the 40 GB of Xcode caches you could delete right now sits three levels deep. DiskX's default ordering answers the question users actually ask: **"What should I delete first?"**
+
+## Download
+
+**[⬇ Download DiskX 1.0.0 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
+
+The 1.0.0 build is **ad-hoc signed, not yet notarized** (notarization needs a paid
+Apple Developer account). macOS will therefore quarantine it on first launch, so
+open it once with **right-click → Open → Open**, or clear the flag manually:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/DiskX.app
+```
+
+Prefer to build it yourself? See [Build & run](#build--run) — it takes about ten seconds.
 
 ## Highlights
 
@@ -14,6 +38,31 @@ Every existing analyzer sorts by raw size, which puts `/System` and your Photos 
 - **WizTree-class scanning**: parallel `getattrlistbulk` work-stealing pool; hard links deduped by inode; live streaming results — never a blank wait.
 - **100 % keyboard**: `↑↓/jk` move · `→/Return` descend · `←/⌘↑` up · `X` mark across folders · `Space` QuickLook · `1–5` sorts · `` ` `` flat Top-Files view · `G` goal mode ("I need 25 GB back") · `?` cheat sheet.
 - **Fear-free deletion**: select 1–n items → `Delete` → a keyboard-first confirm sheet. **Return or Y confirms, Esc or N cancels.** Risk-proportional friction: if everything regenerates, one Return suffices; if anything is *yours*, Return goes inert and an explicit `Y` is required. Trash-only (never permanent), app-level `⌘Z` restores the whole batch. Protected system items can never enter the flow.
+
+## DiskX vs. the alternatives
+
+DiskX exists because we read thousands of user reviews and forum threads about the
+tools below and built around what people kept asking for. If you're comparing Mac
+disk space analyzers, here's an honest summary — including where the others are
+genuinely better.
+
+| Tool | Platform | Price | Approach | Where DiskX differs |
+|---|---|---|---|---|
+| **DiskX** | macOS 14+ | Free, open source | Treemap + keyboard list, reclaim-first sorting | Sorts by what's safe to delete, not raw size; 100 % keyboard; Trash-only with undo |
+| **DaisyDisk** | macOS | ~$10 one-time | Beautiful sunburst chart, drag-to-collector deletion | DaisyDisk's sunburst is gorgeous and it's genuinely fast; DiskX trades it for an area-accurate treemap, keyboard-only operation, and explicit "safe to delete" reasoning |
+| **CleanMyMac** | macOS | Subscription | Automated one-click cleanup suites | CleanMyMac automates far more (malware scan, uninstaller, maintenance); DiskX only analyzes and deletes what *you* pick, with no subscription, no telemetry, no background agents |
+| **Disk Inventory X** | macOS | Free | The classic treemap that inspired this category | Disk Inventory X is effectively unmaintained and slow on modern multi-TB disks; DiskX is a native, parallel, Apple Silicon rewrite of the same idea |
+| **GrandPerspective** | macOS | Free (GPL) | Long-lived, well-maintained treemap | GrandPerspective is a great free treemap; DiskX adds labeled rows, reclaim scoring, keyboard navigation and safer deletion |
+| **OmniDiskSweeper** | macOS | Free | Finder-style size-sorted column browser | OmniDiskSweeper is very fast and very simple, but it **deletes permanently** and shows no visualization; DiskX always routes through the Trash and is undoable |
+| **WizTree / TreeSize / WinDirStat / SpaceSniffer** | Windows | Free / paid | The Windows gold standard for fast scans | These don't exist on macOS — DiskX is the answer to "I wish there were a WizTree for Mac" |
+| **ncdu / dust / gdu** | Terminal | Free | Blazing keyboard-driven TUIs | DiskX keeps ncdu's keyboard efficiency and its delete-with-confirm flow, in a native GUI with a treemap |
+| **macOS Storage Settings** | Built in | Free | High-level category bars | The built-in panel famously can't explain "System Data"; the DiskX **Truth Bar** reconciles scanned files, system, purgeable and free space so the numbers add up |
+
+**Common search terms this project answers:** mac disk space analyzer · disk usage
+analyzer macOS · disk explorer Mac · treemap disk visualizer · find large files on
+Mac · free up storage on MacBook · what is System Data on Mac · delete Xcode
+DerivedData · clean node_modules · Disk Inventory X alternative · DaisyDisk
+alternative · WizTree for Mac · ncdu GUI · open source Mac disk cleaner.
 
 ## Build & run
 
@@ -117,3 +166,20 @@ The engine was additionally validated headlessly: 14 unit/integration tests
 (including a real Trash round-trip) and a benchmark scanning **1.33M files in
 45s (~29,000 files/sec) — 2.4× faster than `du`** on the same tree, with the
 reclaim analysis over the whole tree taking a further 1.2s.
+
+## Links
+
+- **Website:** https://avantigroupai.github.io/diskx-web/
+- **Releases:** https://github.com/avantigroupai/DiskX/releases
+- **Design spec:** [docs/DESIGN-SPEC.md](docs/DESIGN-SPEC.md)
+
+## License
+
+Not yet licensed for redistribution — all rights reserved for now. If you want to
+use DiskX in your own project, open an issue.
+
+<sub>Keywords: macOS disk space analyzer, Mac disk usage analyzer, disk explorer,
+storage analyzer, treemap disk visualizer, find large files, free up disk space,
+System Data explainer, Disk Inventory X alternative, DaisyDisk alternative,
+GrandPerspective alternative, OmniDiskSweeper alternative, WizTree for Mac,
+ncdu GUI, open source Mac disk cleaner, Apple Silicon, SwiftUI.</sub>

@@ -11,3 +11,6 @@ DerivedData/
 
 # Signing material — never commit
 Entitlements/*.provisionprofile
+
+# Website source lives in the avantigroupai/diskx-web repo
+site/
