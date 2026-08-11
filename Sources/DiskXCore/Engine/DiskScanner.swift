@@ -225,7 +225,14 @@ public final class ScanSession: @unchecked Sendable {
 
     /// DISKX_TRACE=1 logs every directory before open(2) — the tail of the log
     /// identifies directories whose filesystem blocks the scan.
+    /// Debug builds only. In a release build this would let anyone who can set an
+    /// environment variable for the process turn an FDA-privileged scanner into a
+    /// whole-disk path oracle, streaming every directory it visits to stderr.
+    #if DEBUG
     private static let traceEnabled = ProcessInfo.processInfo.environment["DISKX_TRACE"] != nil
+    #else
+    private static let traceEnabled = false
+    #endif
 
     private func processDirectory(_ job: Job, buffer: UnsafeMutableRawPointer, bufSize: Int) {
         if Self.traceEnabled, let data = (job.path + "\n").data(using: .utf8) {
@@ -263,8 +270,16 @@ public final class ScanSession: @unchecked Sendable {
 
             var offset = 0
             for _ in 0..<count {
+                // Defence in depth: every field width below is derived from data in
+                // this buffer. The kernel is the writer, but VFS drivers (SMB, NFS,
+                // FUSE) participate, so a desynced parse must not walk off the end.
+                guard offset >= 0, offset + 24 <= bufSize else { break }
                 let entry = buffer.advanced(by: offset)
                 let entryLength = Int(entry.loadUnaligned(as: UInt32.self))
+                // A zero length would re-parse the same entry `count` times; an
+                // oversized one would read past the buffer.
+                guard entryLength > 0, offset + entryLength <= bufSize else { break }
+                let entryEnd = offset + entryLength
                 var p = entry.advanced(by: 4)
 
                 // attribute_set_t: five u_int32 groups
@@ -278,8 +293,26 @@ public final class ScanSession: @unchecked Sendable {
 
                 var name = ""
                 if retCommon & Self.CMN_NAME != 0 {
+                    // attrreference_t: a SIGNED offset from the reference's own
+                    // address plus a length. Validate both against this entry, and
+                    // bound the C-string read so a missing NUL cannot run away.
+                    // Absolute position of the attrreference within the buffer.
+                    // `p` already accounts for the entry offset — do not add it twice.
+                    let refOffset = buffer.distance(to: p)
                     let nameOffset = Int(p.loadUnaligned(as: Int32.self))
-                    name = String(cString: p.advanced(by: nameOffset).assumingMemoryBound(to: CChar.self))
+                    let nameLength = Int(p.advanced(by: 4).loadUnaligned(as: UInt32.self))
+                    let nameStart = refOffset + nameOffset
+                    if nameOffset != 0, nameLength > 0,
+                       nameStart >= 0, nameStart + nameLength <= entryEnd {
+                        let base = buffer.advanced(by: nameStart)
+                            .assumingMemoryBound(to: UInt8.self)
+                        // attr_length includes the trailing NUL; stop at the first
+                        // one but never read beyond the declared length.
+                        var len = 0
+                        while len < nameLength && base[len] != 0 { len += 1 }
+                        name = String(decoding: UnsafeBufferPointer(start: base, count: len),
+                                      as: UTF8.self)
+                    }
                     p = p.advanced(by: 8)
                 }
 
@@ -325,15 +358,19 @@ public final class ScanSession: @unchecked Sendable {
                     p = p.advanced(by: 4)
                 }
 
+                // Sizes are filesystem-reported and untrusted: sparse files report
+                // petabytes, and a hostile SMB/NFS/FUSE server can report Int64.max
+                // or a negative off_t. Clamp here so nothing absurd ever reaches the
+                // aggregation arithmetic.
                 var logicalSize: Int64 = 0
                 if retFile & Self.FILE_TOTALSIZE != 0 {
-                    logicalSize = p.loadUnaligned(as: Int64.self)
+                    logicalSize = SaturatingMath.sanitizeSize(p.loadUnaligned(as: Int64.self))
                     p = p.advanced(by: 8)
                 }
 
                 var allocatedSize: Int64 = 0
                 if retFile & Self.FILE_ALLOCSIZE != 0 {
-                    allocatedSize = p.loadUnaligned(as: Int64.self)
+                    allocatedSize = SaturatingMath.sanitizeSize(p.loadUnaligned(as: Int64.self))
                 }
 
                 offset += entryLength
@@ -381,9 +418,9 @@ public final class ScanSession: @unchecked Sendable {
                                          modified: modified, accessed: accessed, parent: job.node,
                                          allocatedSize: countedAllocated, logicalSize: countedLogical)
                     job.node.appendChild(child)
-                    batchAllocated += countedAllocated
-                    batchLogical += countedLogical
-                    batchFiles += 1
+                    batchAllocated = SaturatingMath.add(batchAllocated, countedAllocated)
+                    batchLogical = SaturatingMath.add(batchLogical, countedLogical)
+                    batchFiles = SaturatingMath.add(batchFiles, 1)
                 }
                 // Sockets, fifos, devices: ignored.
             }

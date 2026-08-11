@@ -130,6 +130,9 @@ struct DeletePlan: Identifiable {
     let riskReason: String?
     let excludedProtected: [FileNode]
     let notes: [String]
+    /// (device, inode, type) captured when the plan was built, keyed by node id.
+    /// Re-checked immediately before deletion so a swapped path is refused.
+    var identities: [UInt64: FileIdentity] = [:]
 }
 
 /// One trashed item, retained so ⌘Z can move it back and re-attach its node with
@@ -393,6 +396,14 @@ final class AppModel {
     private var flatCache: [FileNode] = []
     private var flatCacheKey = ""
 
+    /// Upper bound on rows built per refresh. Beyond this the list is not usefully
+    /// browsable anyway, and building it blocks the main actor.
+    static let maxVisibleRows = 5_000
+
+    /// How many entries the current listing omitted because of `maxVisibleRows`.
+    /// Surfaced in the status bar so a truncated view is never silent.
+    private(set) var rowsTruncatedBy = 0
+
     func refreshRows(resetCursor: Bool) {
         guard let root else { rows = []; return }
 
@@ -440,6 +451,18 @@ final class AppModel {
         }
         if !searchText.isEmpty {
             filtered = filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        }
+
+        // A directory can hold hundreds of thousands of entries. Computing reclaim
+        // info and building a Row for every one of them runs on the main actor
+        // every 0.4s during a scan and wedges the UI. Pre-select the largest —
+        // which is what a disk analyzer is for — and report the remainder.
+        if filtered.count > Self.maxVisibleRows {
+            rowsTruncatedBy = filtered.count - Self.maxVisibleRows
+            filtered = Array(filtered.sorted { $0.allocatedSize > $1.allocatedSize }
+                                     .prefix(Self.maxVisibleRows))
+        } else {
+            rowsTruncatedBy = 0
         }
 
         // One info computation per node per refresh — comparators and row builders
@@ -685,7 +708,10 @@ final class AppModel {
             goalResult = nil
             return
         }
-        let target = Int64(gb * 1_000_000_000)
+        // Saturate rather than trap: Int64(1e19) crashes, and the goal field accepts
+        // whatever the user types.
+        let rawTarget = gb * 1_000_000_000
+        let target = rawTarget >= Double(Int64.max) ? Int64.max : Int64(rawTarget)
         // Greedy knapsack over global hotspots: shortest safe path to the goal.
         var picked: [FileNode] = []
         var sum: Int64 = 0
@@ -693,7 +719,7 @@ final class AppModel {
             guard analyzer.info(for: spot.node).tier.isSafeReclaim else { continue }
             if picked.contains(where: { isDescendant(spot.node, of: $0) || $0.id == spot.node.id }) { continue }
             picked.append(spot.node)
-            sum += spot.node.allocatedSize
+            sum = SaturatingMath.add(sum, spot.node.allocatedSize)
             if sum >= target { break }
         }
         marks = Dictionary(uniqueKeysWithValues: picked.map { ($0.id, $0) })
@@ -719,6 +745,7 @@ final class AppModel {
         var deletable: [FileNode] = []
         var protectedItems: [FileNode] = []
         var notes: [String] = []
+        var identities: [UInt64: FileIdentity] = [:]
         var totalBytes: Int64 = 0
         var safeBytes: Int64 = 0
         var risky = false
@@ -730,15 +757,17 @@ final class AppModel {
                 protectedItems.append(node)
                 continue
             }
-            // Pre-flight re-stat: the file may have changed or vanished since the scan.
-            var st = stat()
-            if lstat(node.path, &st) != 0 {
+            // Pre-flight: capture (device, inode, type) so the deletion can refuse
+            // to act if the path is swapped for something else before the user
+            // confirms. An existence-only check would not catch that.
+            guard let identity = FileIdentity.capture(path: node.path) else {
                 notes.append("\(node.name) no longer exists — skipped")
                 continue
             }
+            identities[node.id] = identity
             deletable.append(node)
-            totalBytes += node.allocatedSize
-            safeBytes += info.safeReclaimBytes
+            totalBytes = SaturatingMath.add(totalBytes, node.allocatedSize)
+            safeBytes = SaturatingMath.add(safeBytes, info.safeReclaimBytes)
             if !info.tier.isSafeReclaim {
                 risky = true
                 riskReason = "Contains items that are yours — review the list"
@@ -758,7 +787,8 @@ final class AppModel {
         }
         pendingDelete = DeletePlan(items: deletable, totalBytes: totalBytes, safeBytes: safeBytes,
                                    risky: risky, riskReason: riskReason,
-                                   excludedProtected: protectedItems, notes: notes)
+                                   excludedProtected: protectedItems, notes: notes,
+                                   identities: identities)
     }
 
     func cancelDelete() {
@@ -770,12 +800,13 @@ final class AppModel {
         pendingDelete = nil
         isTrashing = true
         let items = plan.items
+        let identities = plan.identities
         let generation = scanGeneration
         // Anchor the whole tree for the duration: nodes hold `unowned` parents, so
         // the tree must outlive any background path reconstruction.
         let treeAnchor = root
         Task.detached(priority: .userInitiated) { [weak self] in
-            let outcome = TrashEngine.trash(nodes: items)
+            let outcome = TrashEngine.trash(nodes: items, expecting: identities)
             await MainActor.run { [weak self] in
                 self?.trashCompleted(outcome, items: items, generation: generation)
                 _ = treeAnchor
@@ -793,12 +824,16 @@ final class AppModel {
             return
         }
         var records: [TrashRecord] = []
+        // Index by node id: matching on reconstructed path strings was O(n²) with a
+        // full parent-chain walk per comparison, which froze the main actor on large
+        // batches (and could mis-match two nodes sharing a path).
+        let byID = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for result in outcome.results where result.succeeded {
-            guard let node = items.first(where: { $0.path == result.path }),
+            guard let node = byID[result.nodeID],
                   let trashPath = result.trashedTo else { continue }
             records.append(TrashRecord(node: node, originalPath: result.path,
                                        trashURL: URL(fileURLWithPath: trashPath),
-                                       bytes: node.allocatedSize))
+                                       bytes: result.bytesFreed))
             node.detachFromTree()
             marks.removeValue(forKey: node.id)
             selectedIDs.remove(node.id)

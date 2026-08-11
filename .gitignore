@@ -17,13 +17,18 @@ DerivedData/
 # profile all live in the macOS login keychain and must never reach the repo.
 # These patterns are defence in depth for the case where someone exports one
 # into the working tree while debugging a signing problem.
-Entitlements/*.provisionprofile
+*.provisionprofile
 *.p12
+*.p8
+AuthKey_*
+private_keys/
 *.cer
 *.certSigningRequest
 *.mobileprovision
 *.pem
 *.key
+*.keychain
+*.keychain-db
 .env
 .env.*
 

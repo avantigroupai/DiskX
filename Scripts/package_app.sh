@@ -185,6 +185,15 @@ ENTITLEMENTS_DIR="$ROOT/.build/entitlements"
 DEFAULT_ENTITLEMENTS="$ENTITLEMENTS_DIR/${APP_NAME}.entitlements"
 mkdir -p "$ENTITLEMENTS_DIR"
 
+# Fail closed: if the caller named an entitlements file, it must exist. Silently
+# fabricating an empty one here would ship an App Store build with NO sandbox —
+# a signed app claiming protections it does not have.
+if [[ -n "${APP_ENTITLEMENTS:-}" && ! -f "${APP_ENTITLEMENTS}" ]]; then
+  echo "ERROR: APP_ENTITLEMENTS=${APP_ENTITLEMENTS} does not exist." >&2
+  echo "       Refusing to sign with fabricated empty entitlements." >&2
+  exit 1
+fi
+
 APP_ENTITLEMENTS=${APP_ENTITLEMENTS:-$DEFAULT_ENTITLEMENTS}
 if [[ ! -f "$APP_ENTITLEMENTS" ]]; then
   cat > "$APP_ENTITLEMENTS" <<PLIST

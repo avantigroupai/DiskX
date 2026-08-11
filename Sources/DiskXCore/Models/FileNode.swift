@@ -80,13 +80,17 @@ public final class FileNode: Identifiable, @unchecked Sendable {
     }
 
     /// Adds sizes to this node and every ancestor (called once per scanned batch, not per file).
+    ///
+    /// Saturating, never trapping: filesystem-reported sizes are untrusted input
+    /// (sparse files, hostile network mounts) and a plain `+=` crashed the process
+    /// with SIGTRAP once the running totals exceeded Int64.max.
     public func propagateSizes(allocated: Int64, logical: Int64, files: Int64) {
         var node: FileNode? = self
         while let n = node {
             n.lock.withLock {
-                n._allocatedSize += allocated
-                n._logicalSize += logical
-                n._fileCount += files
+                n._allocatedSize = SaturatingMath.add(n._allocatedSize, allocated)
+                n._logicalSize = SaturatingMath.add(n._logicalSize, logical)
+                n._fileCount = SaturatingMath.add(n._fileCount, files)
             }
             node = n.parent
         }
@@ -110,7 +114,10 @@ public final class FileNode: Identifiable, @unchecked Sendable {
         parent.lock.withLock {
             parent._children.removeAll { $0.id == self.id }
         }
-        parent.propagateSizes(allocated: -alloc, logical: -logical, files: -files)
+        // Negation must saturate too: -Int64.min traps.
+        parent.propagateSizes(allocated: SaturatingMath.negate(alloc),
+                              logical: SaturatingMath.negate(logical),
+                              files: SaturatingMath.negate(files))
     }
 
     // MARK: - Paths

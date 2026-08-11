@@ -27,7 +27,13 @@ struct StatusBarView: View {
 
     @ViewBuilder
     private func leading(maxPathWidth: CGFloat) -> some View {
-        if !model.statusSummary.isEmpty {
+        if model.rowsTruncatedBy > 0 {
+            Text("\(model.statusSummary.isEmpty ? "" : model.statusSummary + " · ")Showing largest \(Format.count(Int64(AppModel.maxVisibleRows))) — \(Format.count(Int64(model.rowsTruncatedBy))) more not listed")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .lineLimit(1)
+        } else if !model.statusSummary.isEmpty {
             Text(model.statusSummary)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.primary)

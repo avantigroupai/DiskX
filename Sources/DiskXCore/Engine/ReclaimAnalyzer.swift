@@ -117,20 +117,48 @@ public final class ReclaimAnalyzer: @unchecked Sendable {
         }
     }
 
+    /// Absolute locations DiskX must never offer for deletion. Checked as plain
+    /// prefixes so it stays cheap enough to run during the tree walk.
+    static let protectedPathPrefixes = [
+        "/system", "/usr", "/bin", "/sbin", "/private/var/db", "/library/apple", "/cores",
+    ]
+
+    static func isProtectedSystemPath(_ path: String) -> Bool {
+        guard !path.isEmpty, path.hasPrefix("/") else { return false }
+        let lower = path.lowercased()
+        for prefix in protectedPathPrefixes where lower == prefix || lower.hasPrefix(prefix + "/") {
+            return true
+        }
+        return false
+    }
+
     /// Full analysis pass. Call off-main; results are immutable afterwards.
     public func analyze(root: FileNode) {
         var infoMap: [UInt64: ReclaimInfo] = [:]
         infoMap.reserveCapacity(4096)
         var spots: [Hotspot] = []
 
-        // Shallow nodes (few hundred) get the full path-based classification so
-        // system prefixes and path markers are honored; everything deeper runs the
-        // O(1) inherited-context classifier — full-path scans over millions of
-        // nodes made this pass take minutes.
+        // Shallow nodes get the full path-based classification so system prefixes
+        // and path markers are honored; everything deeper runs the O(1)
+        // inherited-context classifier — full-path scans over millions of nodes
+        // made this pass take minutes.
         let shallowDepthLimit = 2
+        // Protection is checked one level deeper than categorisation, because the
+        // deepest protected prefix (/private/var/db) has three components.
+        //
+        // It is only checked at all when the scan root could actually contain a
+        // system location — scanning a home folder cannot reach /private/var/db, and
+        // building path strings for every node at that depth just to prove it costs
+        // hundreds of thousands of allocations.
+        let rootLower = root.path.lowercased()
+        let needsProtectionChecks = rootLower == "/" || Self.protectedPathPrefixes.contains {
+            rootLower.hasPrefix($0) || $0.hasPrefix(rootLower)
+        }
+        let protectionDepthLimit = needsProtectionChecks ? 3 : shallowDepthLimit
 
         @discardableResult
-        func visit(_ node: FileNode, path: String, depth: Int, inherited: FileCategory?) -> (score: Double, safe: Int64) {
+        func visit(_ node: FileNode, path: String, depth: Int,
+                   inherited: FileCategory?, protectedAncestor: Bool) -> (score: Double, safe: Int64) {
             let isDir = node.isDirectory
             let category: FileCategory
             if depth <= shallowDepthLimit {
@@ -139,8 +167,16 @@ public final class ReclaimAnalyzer: @unchecked Sendable {
                 category = FileCategory.classifyFast(name: node.name, isDirectory: isDir, inherited: inherited)
             }
             let ageDays = node.modified > 0 ? (now - max(node.modified, node.accessed)) / 86_400 : 0
-            let tier = tier(for: category, path: depth <= shallowDepthLimit ? path : "",
+            var tier = tier(for: category, path: depth <= shallowDepthLimit ? path : "",
                             isDirectory: isDir, ageDays: ageDays)
+            // Protection is a property of the whole subtree. Without this, anything
+            // below the shallow limit lost its system classification and was offered
+            // as "Yours — review" (e.g. everything under /private/var/db).
+            let isProtected = protectedAncestor
+                || tier == .protected
+                || (needsProtectionChecks && depth <= protectionDepthLimit
+                    && Self.isProtectedSystemPath(path))
+            if isProtected { tier = .protected }
             let staleness = Self.staleness(now: now, modified: node.modified, accessed: node.accessed)
 
             var info = ReclaimInfo(category: category, tier: tier, stalenessMultiplier: staleness)
@@ -159,11 +195,13 @@ public final class ReclaimAnalyzer: @unchecked Sendable {
                 } else {
                     let childInherited = category.inheritsToChildren ? category : nil
                     for child in node.children {
-                        // Path strings are only needed while the full classifier runs.
-                        let childPath = depth < shallowDepthLimit
+                        // Path strings are needed while the full classifier runs and,
+                        // one level deeper, for the protected-prefix check.
+                        let childPath = depth < protectionDepthLimit
                             ? (path == "/" ? "/" + child.name : path + "/" + child.name)
                             : ""
-                        let r = visit(child, path: childPath, depth: depth + 1, inherited: childInherited)
+                        let r = visit(child, path: childPath, depth: depth + 1,
+                                      inherited: childInherited, protectedAncestor: isProtected)
                         childScore += r.score
                         childSafe += r.safe
                     }
@@ -182,7 +220,7 @@ public final class ReclaimAnalyzer: @unchecked Sendable {
             return (info.score, info.safeReclaimBytes)
         }
 
-        let result = visit(root, path: root.path, depth: 0, inherited: nil)
+        let result = visit(root, path: root.path, depth: 0, inherited: nil, protectedAncestor: false)
         spots.sort { $0.score > $1.score }
         infos = infoMap
         hotspots = Array(spots.prefix(64))

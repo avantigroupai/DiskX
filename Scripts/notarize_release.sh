@@ -123,6 +123,13 @@ notarize() {
   local output status
   set +e
   if [[ -n "$APPLE_ID" && -n "$APPLE_TEAM_ID" && -n "$APPLE_PASSWORD" ]]; then
+    # SECURITY: --password puts the app-specific password in this process's argv,
+    # where any local user can read it with ps for the whole --wait window (often
+    # several minutes). The keychain-profile path below avoids that entirely.
+    echo "WARNING: using inline APPLE_PASSWORD — it is visible in 'ps' output while" >&2
+    echo "         notarization runs. Prefer a stored profile:" >&2
+    echo "         xcrun notarytool store-credentials \"$NOTARY_PROFILE\" \\" >&2
+    echo "           --apple-id ... --team-id ... --password ...    (then unset APPLE_PASSWORD)" >&2
     output=$(xcrun notarytool submit "$target" \
       --apple-id "$APPLE_ID" \
       --team-id "$APPLE_TEAM_ID" \
