@@ -20,8 +20,10 @@ struct FileListView: View {
         VStack(spacing: 0) {
             BreadcrumbBar(model: model)
             Divider()
+            // The scroll view spans the full pane so the scroll bar sits at the card
+            // edge (macOS convention); row content carries its own insets instead.
             listBody
-                .padding(.horizontal, 10)   // breathing room inside the pane card
+                .padding(.horizontal, 4)
         }
     }
 
@@ -204,7 +206,10 @@ private struct FileRowView: View {
                 }
             }
         }
-        .padding(.horizontal, 8)
+        // Extra trailing room so the size column never collides with the overlay
+        // scroll bar, which floats above the content on macOS.
+        .padding(.leading, 10)
+        .padding(.trailing, 18)
         .frame(height: 44)
         .background(alignment: .leading) { proportionalBar }
         .background(selectionColor)
