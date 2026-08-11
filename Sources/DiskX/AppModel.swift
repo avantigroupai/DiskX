@@ -4,6 +4,12 @@ import DiskXCore
 
 // MARK: - View-facing value types
 
+/// Where the app is in the scan lifecycle.
+///
+/// `analyzing` is deliberately distinct from `scanning`: the walk streams results
+/// as it goes, but Reclaim Sort can only rank once the tree is complete, so there
+/// is a short tail where the file list is final and the ranking is not. Collapsing
+/// the two would either hide that pause or make results appear to reshuffle.
 enum ScanPhase: Equatable {
     case idle
     case scanning
@@ -12,6 +18,8 @@ enum ScanPhase: Equatable {
     case failed(String)
 }
 
+/// The five orderings offered by the `1`–`5` keys. `reclaim` is the default and
+/// the product's whole argument — see `ReclaimAnalyzer`.
 enum SortMode: Int, CaseIterable, Identifiable {
     case reclaim = 1, size, forgotten, count, name
     var id: Int { rawValue }
@@ -35,6 +43,7 @@ enum SortMode: Int, CaseIterable, Identifiable {
     }
 }
 
+/// Split between the file list and the treemap.
 enum ViewMode: Int, CaseIterable {
     case both, list, map
     var label: String {
@@ -53,6 +62,9 @@ enum ViewMode: Int, CaseIterable {
     }
 }
 
+/// One-click filters for the shapes of junk people actually hunt for. Each is a
+/// predicate over the analyzer's output rather than a separate scan, so switching
+/// scopes is instant.
 enum SmartScope: String, CaseIterable, Identifiable {
     case devJunk = "Dev Junk"
     case largeOld = "Large & Old"
@@ -71,6 +83,8 @@ enum SmartScope: String, CaseIterable, Identifiable {
         switch self {
         case .devJunk: return info.category == .buildArtifact
         case .largeOld:
+            // 1.5 is the staleness bucket for "over a year untouched"; pairing it
+            // with a 100 MB floor keeps this scope to things worth a decision.
             return node.allocatedSize > 100_000_000 && info.stalenessMultiplier >= 1.5
         case .caches: return info.category == .cache || info.category == .log
         case .installers: return info.category == .installer
@@ -78,6 +92,12 @@ enum SmartScope: String, CaseIterable, Identifiable {
     }
 }
 
+/// One rendered line in the file list: a node plus everything the view needs to
+/// draw it, precomputed so the row body stays allocation-free while scrolling.
+///
+/// Equality is deliberately shallow — id plus the one number that can change under
+/// a stable id. SwiftUI diffs this on every list update, and comparing the derived
+/// strings would cost more than redrawing.
 struct Row: Identifiable, Equatable {
     static func == (lhs: Row, rhs: Row) -> Bool { lhs.id == rhs.id && lhs.primaryBytes == rhs.primaryBytes }
     let node: FileNode
@@ -94,6 +114,13 @@ struct Row: Identifiable, Equatable {
     var id: UInt64 { node.id }
 }
 
+/// What the confirm sheet is about to do, resolved before the sheet appears.
+///
+/// `risky` is the friction dial: when everything in the batch regenerates, Return
+/// confirms; when anything is the user's own work, Return goes inert and an
+/// explicit `Y` is required. `excludedProtected` records system items that were
+/// silently dropped from the selection, so the sheet can say so rather than
+/// letting the user believe they are deleting them.
 struct DeletePlan: Identifiable {
     let id = UUID()
     let items: [FileNode]
@@ -105,6 +132,8 @@ struct DeletePlan: Identifiable {
     let notes: [String]
 }
 
+/// One trashed item, retained so ⌘Z can move it back and re-attach its node with
+/// exactly the byte counts that were subtracted on delete.
 struct TrashRecord {
     let node: FileNode
     let originalPath: String
@@ -112,6 +141,12 @@ struct TrashRecord {
     let bytes: Int64
 }
 
+/// The Truth Bar's accounting, which has to reconcile with Finder.
+///
+/// `otherUsed` is the honest name for what macOS Storage Settings calls "System
+/// Data": used capacity minus what DiskX actually scanned, covering system areas
+/// and anything permissions kept us out of. Deriving it by subtraction rather than
+/// guessing is what keeps the segments adding up to the real disk size.
 struct TruthStats {
     var total: Int64 = 0
     var free: Int64 = 0
@@ -121,6 +156,7 @@ struct TruthStats {
     var otherUsed: Int64 = 0     // used minus scanned (system, unscanned areas)
 }
 
+/// A scannable location offered in the sidebar.
 struct ScanTarget: Identifiable, Hashable {
     let name: String
     let path: String

@@ -145,6 +145,93 @@ final class TreemapTests: XCTestCase {
     }
 }
 
+/// Tree bookkeeping without touching the filesystem. Delete and undo must stay
+/// exactly symmetric or the Truth Bar drifts away from what Finder reports.
+final class FileNodeTests: XCTestCase {
+    private var nextID: UInt64 = 0
+    private func makeID() -> UInt64 { nextID += 1; return nextID }
+
+    /// Paths are reconstructed by walking parents, so the root-is-"/" case needs
+    /// the `//` guard — otherwise every absolute path gains a leading slash.
+    func testPathReconstructionHandlesFilesystemRoot() {
+        let root = FileNode(id: makeID(), name: "/", flags: [.directory], parent: nil)
+        let users = FileNode(id: makeID(), name: "Users", flags: [.directory], parent: root)
+        root.appendChild(users)
+        let me = FileNode(id: makeID(), name: "me", flags: [.directory], parent: users)
+        users.appendChild(me)
+
+        XCTAssertEqual(root.path, "/")
+        XCTAssertEqual(users.path, "/Users")
+        XCTAssertEqual(me.path, "/Users/me")
+    }
+
+    func testAncestryRunsRootFirst() {
+        let root = FileNode(id: makeID(), name: "/tmp", flags: [.directory], parent: nil)
+        let mid = FileNode(id: makeID(), name: "mid", flags: [.directory], parent: root)
+        root.appendChild(mid)
+        let leaf = FileNode(id: makeID(), name: "leaf.bin", flags: [], parent: mid)
+        mid.appendChild(leaf)
+
+        XCTAssertEqual(leaf.ancestryFromRoot.map(\.name), ["/tmp", "mid", "leaf.bin"])
+    }
+
+    func testDetachSubtractsFromEveryAncestor() {
+        let root = FileNode(id: makeID(), name: "/tmp", flags: [.directory], parent: nil)
+        let mid = FileNode(id: makeID(), name: "mid", flags: [.directory], parent: root)
+        root.appendChild(mid)
+        let leaf = FileNode(id: makeID(), name: "leaf.bin", flags: [], parent: mid,
+                            allocatedSize: 4_096, logicalSize: 4_000)
+        mid.appendChild(leaf)
+        mid.propagateSizes(allocated: 4_096, logical: 4_000, files: 1)
+
+        XCTAssertEqual(root.allocatedSize, 4_096)
+        XCTAssertEqual(root.fileCount, 1)
+
+        leaf.detachFromTree()
+
+        XCTAssertEqual(mid.children.count, 0)
+        XCTAssertEqual(mid.allocatedSize, 0)
+        XCTAssertEqual(root.allocatedSize, 0, "sizes must unwind all the way to the root")
+        XCTAssertEqual(root.logicalSize, 0)
+        XCTAssertEqual(root.fileCount, 0)
+    }
+
+    /// Detaching the scan root is a no-op rather than a crash: it has no parent to
+    /// be removed from.
+    func testDetachingRootIsHarmless() {
+        let root = FileNode(id: makeID(), name: "/tmp", flags: [.directory], parent: nil)
+        root.detachFromTree()
+        XCTAssertEqual(root.allocatedSize, 0)
+    }
+
+    func testLargestFilesEdgeCases() {
+        let root = FileNode(id: makeID(), name: "/tmp", flags: [.directory], parent: nil)
+        for size in [10, 50, 30] {
+            let node = FileNode(id: makeID(), name: "f\(size).bin", flags: [], parent: root,
+                                allocatedSize: Int64(size), logicalSize: Int64(size))
+            root.appendChild(node)
+        }
+
+        XCTAssertTrue(root.largestFiles(limit: 0).isEmpty)
+        XCTAssertEqual(root.largestFiles(limit: 2).map(\.allocatedSize), [50, 30])
+        // Asking for more than exist returns everything, still ordered.
+        XCTAssertEqual(root.largestFiles(limit: 99).map(\.allocatedSize), [50, 30, 10])
+        // Directories are never returned as "files".
+        XCTAssertFalse(root.largestFiles(limit: 99).contains { $0.isDirectory })
+    }
+
+    func testFlagsDescribeNodeKind() {
+        let dir = FileNode(id: makeID(), name: "App.app", flags: [.directory, .package], parent: nil)
+        XCTAssertTrue(dir.isDirectory)
+        XCTAssertTrue(dir.isPackage)
+        XCTAssertFalse(dir.isInaccessible)
+
+        let file = FileNode(id: makeID(), name: "f.bin", flags: [], parent: nil)
+        XCTAssertFalse(file.isDirectory)
+        XCTAssertEqual(file.fileCount, 1, "a file counts as one file at construction")
+    }
+}
+
 final class CategoryTests: XCTestCase {
     func testClassification() {
         XCTAssertEqual(FileCategory.classify(name: "chunk.js", path: "/users/x/proj/node_modules/react/chunk.js", isDirectory: false), .buildArtifact)

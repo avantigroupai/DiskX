@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Direct (Developer ID) distribution: deliberately NOT sandboxed.
+
+         The Mac App Store variant must be sandboxed and can therefore only see
+         folders the user explicitly grants. A directly distributed disk
+         visualizer is expected to survey whole volumes, so this build relies on
+         the user granting Full Disk Access in System Settings, Privacy and
+         Security instead. That is a TCC grant, not an entitlement.
+
+         Notarization requires the hardened runtime, which package_app.sh
+         applies whenever SIGNING_MODE=identity. DiskX needs none of the
+         hardened runtime exceptions: no JIT, no unsigned executable memory, no
+         dyld environment variables, no library validation opt out. An empty
+         dictionary is therefore the correct and most restrictive entitlement
+         set here. Do not copy entries over from DiskX-AppStore.entitlements,
+         whose security scoped bookmark keys are inert outside the sandbox.
+
+         Note: XML comments may not contain a double hyphen, which is why the
+         codesign flags are described in prose above rather than quoted. -->
+</dict>
+</plist>

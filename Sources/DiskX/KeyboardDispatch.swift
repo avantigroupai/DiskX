@@ -135,5 +135,8 @@ extension AppModel {
 }
 
 extension Notification.Name {
+    /// Posted when a bare keystroke should move focus into the search field. The
+    /// dispatcher runs above the view tree and has no reference to the field, so
+    /// this is the one hop back down.
     static let diskxFocusSearch = Notification.Name("diskxFocusSearch")
 }

@@ -25,8 +25,22 @@ if [[ ${#ARCH_LIST[@]} -eq 0 ]]; then
   ARCH_LIST=("$HOST_ARCH")
 fi
 
+# SwiftPM keeps one llbuild database per scratch path, and that database is
+# keyed to the arch of the last build. Building arm64 then x86_64 in the shared
+# .build makes the second one fail with "command ... not registered" for every
+# auxiliary file. Give each arch its own scratch path when producing a universal
+# binary so both stay independently incremental.
+scratch_path_for_arch() {
+  local arch="$1"
+  if [[ ${#ARCH_LIST[@]} -gt 1 ]]; then
+    echo ".build/universal-$arch"
+  else
+    echo ".build"
+  fi
+}
+
 for ARCH in "${ARCH_LIST[@]}"; do
-  swift build -c "$CONF" --arch "$ARCH"
+  swift build -c "$CONF" --arch "$ARCH" --scratch-path "$(scratch_path_for_arch "$ARCH")"
 done
 
 APP="$ROOT/${APP_NAME}.app"
@@ -76,9 +90,11 @@ PLIST
 build_product_path() {
   local name="$1"
   local arch="$2"
+  local scratch
+  scratch="$(scratch_path_for_arch "$arch")"
   case "$arch" in
-    arm64|x86_64) echo ".build/${arch}-apple-macosx/$CONF/$name" ;;
-    *) echo ".build/$CONF/$name" ;;
+    arm64|x86_64) echo "${scratch}/${arch}-apple-macosx/$CONF/$name" ;;
+    *) echo "${scratch}/$CONF/$name" ;;
   esac
 }
 
@@ -144,7 +160,7 @@ if [[ ${#SWIFTPM_BUNDLES[@]} -gt 0 ]]; then
 fi
 
 # Embed frameworks if any exist in the build folder.
-FRAMEWORK_DIRS=(".build/$CONF" ".build/${ARCH_LIST[0]}-apple-macosx/$CONF")
+FRAMEWORK_DIRS=("$(scratch_path_for_arch "${ARCH_LIST[0]}")/$CONF" "$PREFERRED_BUILD_DIR")
 for dir in "${FRAMEWORK_DIRS[@]}"; do
   if compgen -G "${dir}/*.framework" >/dev/null; then
     cp -R "${dir}/"*.framework "$APP/Contents/Frameworks/"

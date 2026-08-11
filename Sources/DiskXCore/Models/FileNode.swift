@@ -206,6 +206,8 @@ private struct MinHeap {
     }
 }
 
+/// Identity is the scan-local id, not the path: two nodes from different scans are
+/// never equal, and a node stays itself even as its aggregate sizes change under it.
 extension FileNode: Hashable {
     public static func == (lhs: FileNode, rhs: FileNode) -> Bool { lhs.id == rhs.id }
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }

@@ -1,6 +1,13 @@
 import SwiftUI
 import DiskXCore
 
+/// The app entry point.
+///
+/// Menu commands are the discoverable half of a keyboard-first app: every bare-key
+/// action in `KeyboardDispatch` that a newcomer would not guess also appears here
+/// with its ⌘ equivalent. The standard Edit items are left intact so text fields
+/// keep working — row-scoped ⌘A/⌘C are handled by the dispatcher only when no
+/// field is focused.
 @main
 struct DiskXApp: App {
     @State private var model = AppModel()

@@ -1,5 +1,10 @@
 import Foundation
 
+/// User-facing number and date rendering.
+///
+/// Everything here produces localized output, so callers must treat the results
+/// as display strings only — never parse them back or compare them across
+/// locales.
 public enum Format {
     private static let byteFormatter: ByteCountFormatter = {
         let f = ByteCountFormatter()

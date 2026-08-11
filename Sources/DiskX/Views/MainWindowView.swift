@@ -2,6 +2,12 @@ import SwiftUI
 import AppKit
 import DiskXCore
 
+/// The window shell: sidebar, Truth Bar, and the list/treemap panes.
+///
+/// It also owns the local `NSEvent` monitor that feeds `AppModel.handleKey`. The
+/// monitor lives here rather than in the model because its lifetime has to match
+/// the window's — leaving it installed after the window closes would keep routing
+/// keystrokes into a detached model.
 struct MainWindowView: View {
     @Bindable var model: AppModel
     @State private var keyMonitor: Any?

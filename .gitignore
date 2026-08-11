@@ -2,15 +2,30 @@
 .build/
 .swiftpm/
 DiskX.app/
+dist/
 *.pkg
+*.dmg
 *.icns.tmp
 DerivedData/
 
 # macOS
 .DS_Store
 
-# Signing material — never commit
+# Signing material — never commit.
+#
+# The private key, the app-specific password and the notarytool credential
+# profile all live in the macOS login keychain and must never reach the repo.
+# These patterns are defence in depth for the case where someone exports one
+# into the working tree while debugging a signing problem.
 Entitlements/*.provisionprofile
+*.p12
+*.cer
+*.certSigningRequest
+*.mobileprovision
+*.pem
+*.key
+.env
+.env.*
 
 # Website source lives in the avantigroupai/diskx-web repo
 site/

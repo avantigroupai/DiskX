@@ -2,6 +2,9 @@ import Foundation
 import Darwin
 import os
 
+/// Live counters polled by the UI while a scan runs. Read through
+/// `ScanSession.progress`, which takes a snapshot under a lock — the fields are
+/// updated from every worker thread and are never individually consistent.
 public struct ScanProgress: Sendable {
     public init() {}
     public var filesScanned: Int64 = 0
@@ -12,6 +15,12 @@ public struct ScanProgress: Sendable {
     public var finished: Bool = false
 }
 
+/// Why a scan did not produce a tree.
+///
+/// Only the *root* failing is an error. Individual directories that cannot be
+/// opened are counted in `ScanProgress.deniedDirs` and surfaced as the honest
+/// "unreadable folders" chip, because a partial answer beats no answer — but an
+/// unreadable root would otherwise look like an empty disk, which is a lie.
 public enum ScanError: Error, LocalizedError {
     case cannotOpenRoot(String, errno: Int32)
     case cancelled

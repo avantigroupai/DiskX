@@ -34,6 +34,8 @@ enum AppTheme: String, CaseIterable, Identifiable {
     }
 }
 
+/// The ⌘, settings pane. Appearance only — DiskX has no accounts, no telemetry
+/// toggles and nothing to configure about scanning.
 struct SettingsView: View {
     @Bindable var model: AppModel
     @AppStorage(AppTheme.storageKey) private var themeRaw = AppTheme.system.rawValue

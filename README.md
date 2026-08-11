@@ -18,15 +18,12 @@ Every existing analyzer sorts by raw size, which puts `/System` and your Photos 
 
 ## Download
 
-**[⬇ Download DiskX 1.0.0 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
+**[⬇ Download DiskX 1.0.1 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
 
-The 1.0.0 build is **ad-hoc signed, not yet notarized** (notarization needs a paid
-Apple Developer account). macOS will therefore quarantine it on first launch, so
-open it once with **right-click → Open → Open**, or clear the flag manually:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/DiskX.app
-```
+Signed with a Developer ID certificate and **notarized by Apple**, so it just
+opens — no right-click → Open detour, no Privacy & Security panel, no
+`xattr` incantation. Both the app and the DMG carry stapled notarization
+tickets, so the first launch works offline too.
 
 Prefer to build it yourself? See [Build & run](#build--run) — it takes about ten seconds.
 
@@ -100,8 +97,10 @@ privacy manifest with required-reason API declarations
 ([PrivacyInfo.xcprivacy](Sources/DiskX/Resources/PrivacyInfo.xcprivacy)),
 app icon (Icon.icns), category/copyright/hi-res Info.plist metadata, and
 sandbox-aware scanning (`AccessManager`). Direct distribution (Developer ID +
-notarization, no sandbox) keeps full-disk scanning; see the skill scripts
-`sign-and-notarize.sh` for that path.
+notarization, no sandbox) keeps full-disk scanning:
+[Scripts/notarize_release.sh](Scripts/notarize_release.sh) builds a universal
+binary, signs it with the Developer ID identity under the hardened runtime, then
+notarizes and staples both the `.app` and the DMG.
 
 ## Appearance
 
