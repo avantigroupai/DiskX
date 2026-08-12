@@ -12,11 +12,12 @@
 #      .p12 locally. Verify with:
 #          security find-identity -v -p codesigning
 #   2. A stored notarytool credential profile, created once with an
-#      app-specific password from account.apple.com (NOT the Apple ID password):
+#      app-specific password from account.apple.com (NOT the Apple ID password).
+#      Omit --password to be prompted, so it never enters your shell history:
 #          xcrun notarytool store-credentials DiskX-Notary \
-#            --apple-id "you@example.com" --team-id "579VUWVTXN" --password "abcd-efgh-ijkl-mnop"
+#            --apple-id "you@example.com" --team-id "579VUWVTXN"
 #      A profile is per Apple ID + team, not per app, so an existing profile for
-#      the same team works as-is:  NOTARY_PROFILE=WOS-Notary Scripts/notarize_release.sh
+#      the same team works as-is — this script probes for one automatically.
 #   3. The team's Apple Developer Program agreements must be in effect.
 #      A 403 "required agreement is missing or has expired" means the Account
 #      Holder has to accept the current agreement at developer.apple.com →
@@ -28,7 +29,7 @@
 #
 # Environment overrides:
 #   APP_IDENTITY     signing identity (auto-detected from the keychain if unset)
-#   NOTARY_PROFILE   notarytool keychain profile name (default: DiskX-Notary)
+#   NOTARY_PROFILE   pin a notarytool keychain profile (default: auto-detected)
 #   APPLE_ID / APPLE_TEAM_ID / APPLE_PASSWORD  inline credentials instead of a profile
 #   ARCHES           space-separated arch list (default: "arm64 x86_64" universal)
 #   DIST_DIR         output directory (default: <root>/dist)
@@ -39,7 +40,6 @@ cd "$ROOT"
 source "$ROOT/version.env"
 
 DIST_DIR="${DIST_DIR:-$ROOT/dist}"
-NOTARY_PROFILE="${NOTARY_PROFILE:-DiskX-Notary}"
 SKIP_NOTARIZE="${SKIP_NOTARIZE:-0}"
 APPLE_ID="${APPLE_ID:-}"
 APPLE_TEAM_ID="${APPLE_TEAM_ID:-}"
@@ -75,10 +75,60 @@ fi
 # The team id in parentheses is what notarytool matches the signature against.
 TEAM_ID=$(sed -E 's/.*\(([A-Z0-9]+)\)$/\1/' <<<"$APP_IDENTITY")
 
+# ---------------------------------------------------------------------------
+# 1b. Find a notarytool credential profile.
+#
+# A profile is per Apple ID + team, NOT per app, so any existing profile for
+# this team authenticates for DiskX. Hardcoding "DiskX-Notary" made this script
+# fail on a machine that had a perfectly good profile under another name, so
+# probe instead. Set NOTARY_PROFILE to pin one.
+#
+# Note: a stored profile is invisible to `security find-generic-password` and to
+# `security dump-keychain` — notarytool keeps it in the data-protection keychain.
+# `notarytool history` is the only reliable existence check.
+# ---------------------------------------------------------------------------
+find_notary_profile() {
+  local candidates=("${NOTARY_PROFILE:-}" DiskX-Notary WOS-Notary ProcessX-Notary notarytool)
+  local p
+  for p in "${candidates[@]}"; do
+    [[ -z "$p" ]] && continue
+    if xcrun notarytool history --keychain-profile "$p" >/dev/null 2>&1; then
+      echo "$p"; return 0
+    fi
+  done
+  return 1
+}
+
+# Inline credentials skip the profile lookup entirely.
+if [[ -n "$APPLE_ID" && -n "$APPLE_TEAM_ID" && -n "$APPLE_PASSWORD" ]]; then
+  NOTARY_PROFILE="${NOTARY_PROFILE:-<inline credentials>}"
+elif [[ "$SKIP_NOTARIZE" != "1" ]]; then
+  if ! NOTARY_PROFILE="$(find_notary_profile)"; then
+    cat >&2 <<ERR
+ERROR: No notarytool credential profile found.
+
+Create one once, with an app-specific password from account.apple.com (NOT the
+Apple ID password). Omit --password and it prompts, keeping the secret out of
+your shell history:
+
+    xcrun notarytool store-credentials DiskX-Notary \\
+      --apple-id "you@example.com" --team-id "$TEAM_ID"
+
+Any existing profile for team $TEAM_ID also works:
+    NOTARY_PROFILE=<name> Scripts/notarize_release.sh
+
+To build and Developer ID sign without submitting:
+    SKIP_NOTARIZE=1 Scripts/notarize_release.sh
+ERR
+    exit 1
+  fi
+fi
+
 echo "==> Identity:  $APP_IDENTITY"
 echo "==> Team:      $TEAM_ID"
 echo "==> Version:   $MARKETING_VERSION ($BUILD_NUMBER)"
 echo "==> Arches:    $ARCHES"
+echo "==> Notary:    ${NOTARY_PROFILE:-(skipped)}"
 echo
 
 # ---------------------------------------------------------------------------
