@@ -434,9 +434,9 @@ public final class ScanSession: @unchecked Sendable {
 
         let files = batchFiles, bytes = batchAllocated
         progressLock.withLock {
-            $0.filesScanned += files
-            $0.dirsScanned += 1
-            $0.bytesFound += bytes
+            $0.filesScanned = SaturatingMath.add($0.filesScanned, files)
+            $0.dirsScanned = SaturatingMath.add($0.dirsScanned, 1)
+            $0.bytesFound = SaturatingMath.add($0.bytesFound, bytes)
             $0.currentPath = job.path
         }
     }

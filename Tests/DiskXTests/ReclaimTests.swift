@@ -279,4 +279,20 @@ final class ReclaimAnalyzerTests: XCTestCase {
         XCTAssertEqual(analyzer.totalSafeReclaim, 0)
         XCTAssertTrue(analyzer.hotspots.isEmpty)
     }
+
+    func testReclaimAnalyzerSaturatingChildSafeDoesNotOverflow() {
+        let root = FileNode(id: makeID(), name: "/Users/tester", flags: [.directory], parent: nil)
+        let sub = FileNode(id: makeID(), name: "Downloads", flags: [.directory], parent: root)
+        root.appendChild(sub)
+        let f1 = FileNode(id: makeID(), name: "huge1.dmg", flags: [], parent: sub,
+                          allocatedSize: Int64.max - 100, logicalSize: Int64.max - 100)
+        let f2 = FileNode(id: makeID(), name: "huge2.dmg", flags: [], parent: sub,
+                          allocatedSize: 200, logicalSize: 200)
+        sub.appendChild(f1)
+        sub.appendChild(f2)
+
+        let analyzer = ReclaimAnalyzer()
+        analyzer.analyze(root: root)
+        XCTAssertEqual(analyzer.totalSafeReclaim, .max, "totalSafeReclaim must saturate to Int64.max without trapping")
+    }
 }

@@ -45,6 +45,7 @@ public enum TreemapLayout {
             let maxW = row.map(\.weight).max()!
             let minW = row.map(\.weight).min()!
             let s2 = side * side
+            guard s2 * minW > 0 else { return .infinity }
             return max(s2 * maxW / (sum * sum), sum * sum / (s2 * minW))
         }
 

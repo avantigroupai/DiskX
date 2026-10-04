@@ -108,10 +108,12 @@ public enum TrashEngine {
         return Outcome(results: results, bytesFreed: freed)
     }
 
-    /// Removes nodes that are descendants of other nodes in the set.
+    /// Removes nodes that are descendants of other nodes in the set, and eliminates duplicate entries.
     public static func minimalCover(of nodes: [FileNode]) -> [FileNode] {
-        let ids = Set(nodes.map(\.id))
-        return nodes.filter { node in
+        var seen = Set<UInt64>()
+        let uniqueNodes = nodes.filter { seen.insert($0.id).inserted }
+        let ids = Set(uniqueNodes.map(\.id))
+        return uniqueNodes.filter { node in
             var ancestor = node.parent
             while let a = ancestor {
                 if ids.contains(a.id) { return false }

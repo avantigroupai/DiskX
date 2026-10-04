@@ -31,6 +31,14 @@ public enum SaturatingMath {
         return b > 0 ? .max : .min
     }
 
+    /// Subtraction that saturates at the Int64 bounds instead of trapping.
+    @inline(__always)
+    public static func subtract(_ a: Int64, _ b: Int64) -> Int64 {
+        let (result, overflow) = a.subtractingReportingOverflow(b)
+        guard overflow else { return result }
+        return b > 0 ? .min : .max
+    }
+
     /// Negation that cannot trap (`-Int64.min` overflows).
     @inline(__always)
     public static func negate(_ value: Int64) -> Int64 {

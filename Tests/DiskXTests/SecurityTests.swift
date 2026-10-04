@@ -45,6 +45,14 @@ final class SecurityTests: XCTestCase {
         XCTAssertEqual(SaturatingMath.add(5, 7), 12)
     }
 
+    func testSaturatingSubtractDoesNotTrap() {
+        XCTAssertEqual(SaturatingMath.subtract(.min, 1), .min)
+        XCTAssertEqual(SaturatingMath.subtract(.min, .max), .min)
+        XCTAssertEqual(SaturatingMath.subtract(.max, -1), .max)
+        XCTAssertEqual(SaturatingMath.subtract(10, 3), 7)
+        XCTAssertEqual(SaturatingMath.subtract(3, 10), -7)
+    }
+
     func testSaturatingNegateHandlesInt64Min() {
         XCTAssertEqual(SaturatingMath.negate(.min), .max)   // -Int64.min would trap
         XCTAssertEqual(SaturatingMath.negate(42), -42)
@@ -156,6 +164,47 @@ final class SecurityTests: XCTestCase {
         XCTAssertEqual(analyzer.info(for: leaf).tier, .protected,
                        "everything under a protected directory must stay protected")
         XCTAssertFalse(analyzer.info(for: leaf).tier.isSafeReclaim)
+    }
+
+    func testBareSystemPrefixPathsProtected() {
+        let systemDir = FileCategory.classify(name: "System", path: "/System", isDirectory: true)
+        let usrDir = FileCategory.classify(name: "usr", path: "/usr", isDirectory: true)
+        let binDir = FileCategory.classify(name: "bin", path: "/bin", isDirectory: true)
+        let sbinDir = FileCategory.classify(name: "sbin", path: "/sbin", isDirectory: true)
+        let varDb = FileCategory.classify(name: "db", path: "/private/var/db", isDirectory: true)
+
+        XCTAssertEqual(systemDir, .system, "/System without trailing slash must classify as .system")
+        XCTAssertEqual(usrDir, .system, "/usr without trailing slash must classify as .system")
+        XCTAssertEqual(binDir, .system, "/bin without trailing slash must classify as .system")
+        XCTAssertEqual(sbinDir, .system, "/sbin without trailing slash must classify as .system")
+        XCTAssertEqual(varDb, .system, "/private/var/db without trailing slash must classify as .system")
+    }
+
+    func testVolumeTrashPathsDetected() {
+        let rootTrashes = FileCategory.classify(name: ".Trashes", path: "/.Trashes", isDirectory: true)
+        let userTrashes = FileCategory.classify(name: "501", path: "/.Trashes/501", isDirectory: true)
+        let extTrashes = FileCategory.classify(name: ".Trashes", path: "/Volumes/External/.Trashes", isDirectory: true)
+
+        XCTAssertEqual(rootTrashes, .trash, "/.Trashes must be classified as .trash")
+        XCTAssertEqual(userTrashes, .trash, "/.Trashes/501 must be classified as .trash")
+        XCTAssertEqual(extTrashes, .trash, "/Volumes/External/.Trashes must be classified as .trash")
+    }
+
+    func testTreemapHandlesMicroWeightsWithoutNaN() {
+        let rect = CGRect(x: 0, y: 0, width: 800, height: 600)
+        let items = [
+            TreemapLayout.Item(id: 1, weight: 1e-15),
+            TreemapLayout.Item(id: 2, weight: 1e-18),
+            TreemapLayout.Item(id: 3, weight: 1000)
+        ]
+        let placements = TreemapLayout.layout(items: items, in: rect)
+        XCTAssertEqual(placements.count, 3)
+        for placement in placements {
+            XCTAssertFalse(placement.rect.origin.x.isNaN, "rect x must not be NaN")
+            XCTAssertFalse(placement.rect.origin.y.isNaN, "rect y must not be NaN")
+            XCTAssertFalse(placement.rect.size.width.isNaN, "rect width must not be NaN")
+            XCTAssertFalse(placement.rect.size.height.isNaN, "rect height must not be NaN")
+        }
     }
 }
 

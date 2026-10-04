@@ -24,14 +24,26 @@ public enum FileNodeSorter {
         case .reclaim:
             let sorted: [FileNode]
             if !infos.isEmpty {
-                sorted = nodes.sorted { (infos[$0.id]?.score ?? 0) > (infos[$1.id]?.score ?? 0) }
+                sorted = nodes.sorted { a, b in
+                    let sA = infos[a.id]?.score ?? 0
+                    let sB = infos[b.id]?.score ?? 0
+                    if sA != sB { return sA > sB }
+                    if a.allocatedSize != b.allocatedSize { return a.allocatedSize > b.allocatedSize }
+                    return a.name.localizedStandardCompare(b.name) == .orderedAscending
+                }
             } else {
-                sorted = nodes.sorted { $0.allocatedSize > $1.allocatedSize }
+                sorted = nodes.sorted { a, b in
+                    if a.allocatedSize != b.allocatedSize { return a.allocatedSize > b.allocatedSize }
+                    return a.name.localizedStandardCompare(b.name) == .orderedAscending
+                }
             }
             return reversed ? sorted.reversed() : sorted
 
         case .size:
-            let sorted = nodes.sorted { $0.allocatedSize > $1.allocatedSize }
+            let sorted = nodes.sorted { a, b in
+                if a.allocatedSize != b.allocatedSize { return a.allocatedSize > b.allocatedSize }
+                return a.name.localizedStandardCompare(b.name) == .orderedAscending
+            }
             return reversed ? sorted.reversed() : sorted
 
         case .untouched:
@@ -83,11 +95,21 @@ public enum FileNodeSorter {
                 let staleness = ReclaimAnalyzer.staleness(now: now, modified: node.modified, accessed: node.accessed)
                 return Double(node.allocatedSize) * staleness
             }
-            let sorted = nodes.sorted { forgottenWeight($0) > forgottenWeight($1) }
+            let sorted = nodes.sorted { a, b in
+                let wA = forgottenWeight(a)
+                let wB = forgottenWeight(b)
+                if wA != wB { return wA > wB }
+                if a.allocatedSize != b.allocatedSize { return a.allocatedSize > b.allocatedSize }
+                return a.name.localizedStandardCompare(b.name) == .orderedAscending
+            }
             return reversed ? sorted.reversed() : sorted
 
         case .count:
-            let sorted = nodes.sorted { $0.fileCount > $1.fileCount }
+            let sorted = nodes.sorted { a, b in
+                if a.fileCount != b.fileCount { return a.fileCount > b.fileCount }
+                if a.allocatedSize != b.allocatedSize { return a.allocatedSize > b.allocatedSize }
+                return a.name.localizedStandardCompare(b.name) == .orderedAscending
+            }
             return reversed ? sorted.reversed() : sorted
 
         case .name:

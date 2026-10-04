@@ -138,4 +138,33 @@ final class SortTests: XCTestCase {
         let desc = FileNodeSorter.sort([c, a, b], by: .name, reversed: true)
         XCTAssertEqual(desc.map(\.name), ["gamma", "beta", "alpha"])
     }
+
+    func testSizeSortDeterministicTieBreaking() {
+        let n1 = makeNode(id: 1, name: "zeta.txt", allocatedSize: 1000)
+        let n2 = makeNode(id: 2, name: "alpha.txt", allocatedSize: 1000)
+        let n3 = makeNode(id: 3, name: "beta.txt", allocatedSize: 1000)
+
+        let desc = FileNodeSorter.sort([n1, n2, n3], by: .size, reversed: false)
+        XCTAssertEqual(desc.map(\.name), ["alpha.txt", "beta.txt", "zeta.txt"],
+                       "Equal sizes must break ties deterministically by name")
+    }
+
+    func testCountSortDeterministicTieBreaking() {
+        let n1 = makeNode(id: 1, name: "zeta.txt", allocatedSize: 1000)
+        let n2 = makeNode(id: 2, name: "alpha.txt", allocatedSize: 2000)
+        let n3 = makeNode(id: 3, name: "beta.txt", allocatedSize: 500)
+        // All equal count (1 file)
+        let desc = FileNodeSorter.sort([n1, n2, n3], by: .count, reversed: false)
+        // Tie breaks by size descending first: n2 (2000), n1 (1000), n3 (500)
+        XCTAssertEqual(desc.map(\.name), ["alpha.txt", "zeta.txt", "beta.txt"])
+    }
+
+    func testForgottenSortDeterministicTieBreaking() {
+        let n1 = makeNode(id: 1, name: "zeta.txt", modified: fixedNow - 1000, accessed: fixedNow - 1000, allocatedSize: 1000)
+        let n2 = makeNode(id: 2, name: "alpha.txt", modified: fixedNow - 1000, accessed: fixedNow - 1000, allocatedSize: 1000)
+
+        let desc = FileNodeSorter.sort([n1, n2], by: .forgotten, reversed: false, now: fixedNow)
+        XCTAssertEqual(desc.map(\.name), ["alpha.txt", "zeta.txt"],
+                       "Equal forgotten weights must break ties deterministically by name")
+    }
 }

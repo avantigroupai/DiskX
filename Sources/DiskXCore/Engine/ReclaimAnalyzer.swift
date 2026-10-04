@@ -203,7 +203,7 @@ public final class ReclaimAnalyzer: @unchecked Sendable {
                         let r = visit(child, path: childPath, depth: depth + 1,
                                       inherited: childInherited, protectedAncestor: isProtected)
                         childScore += r.score
-                        childSafe += r.safe
+                        childSafe = SaturatingMath.add(childSafe, r.safe)
                     }
                     info.score = childScore
                     info.safeReclaimBytes = childSafe

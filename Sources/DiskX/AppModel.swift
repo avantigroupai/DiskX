@@ -891,7 +891,7 @@ final class AppModel {
                                               logical: record.node.logicalSize,
                                               files: record.node.fileCount)
                     }
-                    self.freedThisSession -= record.bytes
+                    self.freedThisSession = max(0, SaturatingMath.subtract(self.freedThisSession, record.bytes))
                 }
                 if !failedFinal.isEmpty {
                     self.undoStack.append(failedFinal)   // retryable after the user fixes the cause

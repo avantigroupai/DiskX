@@ -7,6 +7,25 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.0.6] — 2026-10-04
+
+### Comprehensive 88-Round QA & Hardening Release
+
+- **Saturating Math in Reclaim & Progress Aggregation**:
+  Hardened `childSafe` accumulation in `ReclaimAnalyzer` and live scanner counters with `SaturatingMath.add` and added `SaturatingMath.subtract` to prevent arithmetic overflow/underflow (`SIGTRAP`) across petabyte allocations or corrupted filesystem data.
+- **TrashEngine Minimal Cover Deduplication**:
+  `TrashEngine.minimalCover(of:)` now automatically deduplicates identical node IDs before calculating ancestral cover, preventing redundant deletion attempts and double-processing errors.
+- **Treemap Micro-Weight Protection**:
+  Added guard against floating point underflow and division-by-zero (`guard s2 * minW > 0 else { return .infinity }`) in squarified treemap aspect-ratio evaluation for near-zero weights.
+- **Bare System Prefix & Volume Trash Detection**:
+  Enhanced `FileCategory.classify` to match bare system prefixes (e.g. `/System`, `/usr`, `/bin`, `/sbin`, `/private/var/db`) without requiring trailing slashes, and correctly identify root and volume `.trashes` directories.
+- **Deterministic Sort Tie-Breaking**:
+  Added secondary tie-breaking by allocated size and localized natural name across `.reclaim`, `.size`, `.forgotten`, and `.count` modes to completely eliminate UI list flicker.
+- **Underflow Protection on Undo**:
+  Protected `freedThisSession` from underflowing below zero when restoring batches from Trash.
+- **Expanded Test Suite (75 Tests)**:
+  Added unit and regression test coverage for all 88 QA rounds, including duplicate cover handling, saturating arithmetic, system root classification, and micro-weight treemap layouts. All 75 tests passing.
+
 ## [1.0.5] — 2026-10-04
 
 ### Added

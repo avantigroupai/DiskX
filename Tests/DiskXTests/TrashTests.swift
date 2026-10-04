@@ -42,6 +42,25 @@ final class TrashTests: XCTestCase {
                        "nested child must be covered by its selected ancestor")
     }
 
+    func testMinimalCoverDeduplicatesIdenticalNodes() throws {
+        let nodeA = FileNode(id: 1, name: "a.txt", flags: [], parent: nil)
+        let nodeB = FileNode(id: 2, name: "b.txt", flags: [], parent: nil)
+
+        let cover = TrashEngine.minimalCover(of: [nodeA, nodeB, nodeA, nodeB, nodeA])
+        XCTAssertEqual(cover.count, 2)
+        XCTAssertEqual(cover.map(\.id), [1, 2], "Duplicates must be stripped while preserving order")
+    }
+
+    func testMinimalCoverDeduplicatesWithAncestors() throws {
+        let parent = FileNode(id: 10, name: "parent", flags: [.directory], parent: nil)
+        let child = FileNode(id: 11, name: "child", flags: [], parent: parent)
+        parent.appendChild(child)
+
+        let cover = TrashEngine.minimalCover(of: [child, parent, child, parent])
+        XCTAssertEqual(cover.count, 1)
+        XCTAssertEqual(cover.first?.id, 10, "Parent must cover child and redundant parent entries must be deduplicated")
+    }
+
     func testTrashAndRestoreRoundTrip() throws {
         let fileURL = tempDir.appendingPathComponent("victim.bin")
         try Data(repeating: 7, count: 50_000).write(to: fileURL)

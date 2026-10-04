@@ -155,7 +155,14 @@ public enum FileCategory: String, CaseIterable, Sendable {
         let lowerName = name.lowercased()
         let lowerPath = path.lowercased()
 
-        if literallyContains(lowerPath, "/.trash/") || lowerName == ".trash" { return .trash }
+        if literallyContains(lowerPath, "/.trash/")
+            || literallyContains(lowerPath, "/.trashes/")
+            || lowerName == ".trash"
+            || lowerName == ".trashes"
+            || lowerPath.hasSuffix("/.trash")
+            || lowerPath.hasSuffix("/.trashes") {
+            return .trash
+        }
 
         for marker in cachePathMarkers where literallyContains(lowerPath, marker) { return .cache }
         if lowerName == "caches" && isDirectory { return .cache }
@@ -175,7 +182,10 @@ public enum FileCategory: String, CaseIterable, Sendable {
         }
         if literallyContains(lowerPath, ".app/") { return .application }
 
-        for prefix in systemPathPrefixes where lowerPath.hasPrefix(prefix) { return .system }
+        for prefix in systemPathPrefixes {
+            let bare = String(prefix.dropLast())
+            if lowerPath == bare || lowerPath.hasPrefix(prefix) { return .system }
+        }
 
         let ext = (lowerName as NSString).pathExtension
         if !ext.isEmpty {
