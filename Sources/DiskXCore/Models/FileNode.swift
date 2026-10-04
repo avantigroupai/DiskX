@@ -26,6 +26,8 @@ public final class FileNode: Identifiable, @unchecked Sendable {
     public let modified: TimeInterval
     /// Last access Unix timestamp; 0 when unknown.
     public let accessed: TimeInterval
+    /// Timestamp of most recent modification or access (0 when unknown).
+    public var lastTouched: TimeInterval { max(modified, accessed) }
     public unowned let parent: FileNode?
 
     private let lock = OSAllocatedUnfairLock()

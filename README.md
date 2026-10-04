@@ -18,11 +18,10 @@ Every existing analyzer sorts by raw size, which puts `/System` and your Photos 
 
 ## Download
 
-**[⬇ Download DiskX 1.0.3 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
+**[⬇ Download DiskX 1.0.4 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
 
-1.0.3 is the **notarized** build of the 1.0.2 security release, which fixes a
-reproducible crash that let any scanned folder abort the app and hardens the
-deletion path. Update from 1.0.0/1.0.1/1.0.2.
+1.0.4 adds untouched-duration sorting (`3` / `⇧S` to reverse) and multi-selection
+context menu trashing. Update from previous versions.
 
 Drag it to Applications and open it. No right-click → Open, no `xattr`, no
 Privacy & Security detour: it is Developer ID signed, notarized by Apple, and
@@ -37,7 +36,7 @@ Prefer to build it yourself? See [Build & run](#build--run) — it takes about t
 - **Ghost-row hoisting**: deep junk (`DerivedData`, `node_modules`, …) is hoisted into the current level as `↳ …/Xcode/DerivedData · 6 levels deep` — no repetitive drill-down.
 - **Truth Bar**: honest capacity accounting that reconciles with Finder — scanned files, "Other & System" (the System Data mystery, explained), purgeable, free. Plus "Reclaimable now: ~X safe" and a freed-this-session counter.
 - **WizTree-class scanning**: parallel `getattrlistbulk` work-stealing pool; hard links deduped by inode; live streaming results — never a blank wait.
-- **100 % keyboard**: `↑↓/jk` move · `→/Return` descend · `←/⌘↑` up · `X` mark across folders · `Space` QuickLook · `1–5` sorts · `` ` `` flat Top-Files view · `G` goal mode ("I need 25 GB back") · `?` cheat sheet.
+- **100 % keyboard**: `↑↓/jk` move · `→/Return` descend · `←/⌘↑` up · `X` mark across folders · `Space` QuickLook · `1–6` sorts (`⇧S` reverses) · `` ` `` flat Top-Files view · `G` goal mode ("I need 25 GB back") · `?` cheat sheet.
 - **Fear-free deletion**: select 1–n items → `Delete` → a keyboard-first confirm sheet. **Return or Y confirms, Esc or N cancels.** Risk-proportional friction: if everything regenerates, one Return suffices; if anything is *yours*, Return goes inert and an explicit `Y` is required. Trash-only (never permanent), app-level `⌘Z` restores the whole batch. Protected system items can never enter the flow.
 
 ## DiskX vs. the alternatives

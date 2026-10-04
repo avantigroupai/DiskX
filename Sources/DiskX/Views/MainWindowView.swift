@@ -116,7 +116,14 @@ struct MainWindowView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .help("Sort — keys 1–5, S cycles")
+            .help("Sort — keys 1–6, S cycles, ⇧S reverses")
+
+            Button {
+                model.toggleSortDirection()
+            } label: {
+                Image(systemName: model.sortDirectionSymbol)
+            }
+            .help(model.sortDirectionHelp)
 
             Picker("View", selection: viewBinding) {
                 ForEach(ViewMode.allCases, id: \.self) { mode in

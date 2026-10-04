@@ -55,9 +55,19 @@ struct DiskXApp: App {
                     .keyboardShortcut("o", modifiers: [.command, .shift])
             }
             CommandMenu("Sort") {
-                ForEach(SortMode.allCases) { mode in
-                    Button(mode.label) { model.selectSort(mode) }
+                Picker("Sort By", selection: Binding(get: { model.sortMode }, set: { model.selectSort($0) })) {
+                    ForEach(SortMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
                 }
+                Divider()
+                Picker("Direction", selection: $model.sortReversed) {
+                    Text("Descending").tag(false)
+                    Text("Ascending").tag(true)
+                }
+                Divider()
+                Button("Reverse Sort Direction") { model.toggleSortDirection() }
+                    .keyboardShortcut("s", modifiers: [.shift])
                 Divider()
                 Button("Top Files (flat)") { model.flatTop.toggle() }
                     .keyboardShortcut("t")

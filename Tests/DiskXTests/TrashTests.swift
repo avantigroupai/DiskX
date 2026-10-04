@@ -80,6 +80,46 @@ final class TrashTests: XCTestCase {
         XCTAssertEqual(outcome.failures.count, 1)
         XCTAssertNotNil(outcome.failures[0].error)
     }
+
+    func testTrashMultipleNodesAndRestore() throws {
+        let file1URL = tempDir.appendingPathComponent("file1.bin")
+        let file2URL = tempDir.appendingPathComponent("file2.bin")
+        try Data(repeating: 1, count: 20_000).write(to: file1URL)
+        try Data(repeating: 2, count: 30_000).write(to: file2URL)
+
+        let root = try scan(tempDir.path)
+        let node1 = root.children.first { $0.name == "file1.bin" }!
+        let node2 = root.children.first { $0.name == "file2.bin" }!
+
+        let outcome = TrashEngine.trash(nodes: [node1, node2])
+        XCTAssertEqual(outcome.successCount, 2)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file1URL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file2URL.path))
+
+        let trashedPath1 = outcome.results.first(where: { $0.nodeID == node1.id })?.trashedTo
+        let trashedPath2 = outcome.results.first(where: { $0.nodeID == node2.id })?.trashedTo
+        XCTAssertNotNil(trashedPath1)
+        XCTAssertNotNil(trashedPath2)
+
+        // Detach both from tree
+        node1.detachFromTree()
+        node2.detachFromTree()
+        XCTAssertEqual(root.children.count, 0)
+        XCTAssertEqual(root.fileCount, 0)
+
+        // Restore both
+        try FileManager.default.moveItem(atPath: trashedPath1!, toPath: file1URL.path)
+        try FileManager.default.moveItem(atPath: trashedPath2!, toPath: file2URL.path)
+        root.appendChild(node1)
+        root.appendChild(node2)
+        root.propagateSizes(allocated: node1.allocatedSize + node2.allocatedSize,
+                            logical: node1.logicalSize + node2.logicalSize,
+                            files: 2)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file1URL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file2URL.path))
+        XCTAssertEqual(root.fileCount, 2)
+    }
 }
 
 private final class Holder: @unchecked Sendable {

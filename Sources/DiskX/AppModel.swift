@@ -18,31 +18,6 @@ enum ScanPhase: Equatable {
     case failed(String)
 }
 
-/// The five orderings offered by the `1`–`5` keys. `reclaim` is the default and
-/// the product's whole argument — see `ReclaimAnalyzer`.
-enum SortMode: Int, CaseIterable, Identifiable {
-    case reclaim = 1, size, forgotten, count, name
-    var id: Int { rawValue }
-    var label: String {
-        switch self {
-        case .reclaim: return "Reclaim"
-        case .size: return "Size"
-        case .forgotten: return "Forgotten"
-        case .count: return "Files"
-        case .name: return "Name"
-        }
-    }
-    var symbolName: String {
-        switch self {
-        case .reclaim: return "sparkles"
-        case .size: return "arrow.down.right.and.arrow.up.left"
-        case .forgotten: return "hourglass"
-        case .count: return "number"
-        case .name: return "textformat"
-        }
-    }
-}
-
 /// Split between the file list and the treemap.
 enum ViewMode: Int, CaseIterable {
     case both, list, map
@@ -477,7 +452,7 @@ final class AppModel {
             infoByID[ghost.id] = analyzer?.info(for: ghost) ?? ReclaimAnalyzer.computeStandalone(node: ghost, now: now)
         }
 
-        let sorted = sortNodes(filtered, infos: infoByID)
+        let sorted = sortNodes(filtered, infos: infoByID, now: now)
         let maxSize = max(sorted.map(\.allocatedSize).max() ?? 1, 1)
 
         var newRows: [Row] = []
@@ -501,6 +476,9 @@ final class AppModel {
                 cursor = min(cursor, max(0, rows.count - 1))
             }
             selectionAnchor = previousAnchorID.flatMap { id in rows.firstIndex(where: { $0.id == id }) }
+            if selectedIDs.isEmpty && !rows.isEmpty {
+                selectedIDs = [rows[cursor].id]
+            }
         }
     }
 
@@ -521,37 +499,15 @@ final class AppModel {
                    why: analyzer?.whyLine(for: node) ?? "",
                    tier: info.tier,
                    category: info.category,
-                   ageText: Format.age(unixTime: max(node.modified, node.accessed)),
+                   ageText: Format.age(unixTime: node.lastTouched),
                    primaryBytes: primary,
                    allocatedBytes: alloc,
                    barFraction: Double(alloc) / Double(maxSize),
                    safeFraction: alloc > 0 ? Double(info.safeReclaimBytes) / Double(alloc) : 0)
     }
 
-    private func sortNodes(_ nodes: [FileNode], infos: [UInt64: ReclaimInfo]) -> [FileNode] {
-        let sorted: [FileNode]
-        switch sortMode {
-        case .reclaim:
-            if analyzer != nil {
-                sorted = nodes.sorted { (infos[$0.id]?.score ?? 0) > (infos[$1.id]?.score ?? 0) }
-            } else {
-                sorted = nodes.sorted { $0.allocatedSize > $1.allocatedSize }
-            }
-        case .size:
-            sorted = nodes.sorted { $0.allocatedSize > $1.allocatedSize }
-        case .forgotten:
-            let now = Date().timeIntervalSince1970
-            func forgottenWeight(_ node: FileNode) -> Double {
-                let staleness = ReclaimAnalyzer.staleness(now: now, modified: node.modified, accessed: node.accessed)
-                return Double(node.allocatedSize) * staleness
-            }
-            sorted = nodes.sorted { forgottenWeight($0) > forgottenWeight($1) }
-        case .count:
-            sorted = nodes.sorted { $0.fileCount > $1.fileCount }
-        case .name:
-            sorted = nodes.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        }
-        return sortReversed ? sorted.reversed() : sorted
+    private func sortNodes(_ nodes: [FileNode], infos: [UInt64: ReclaimInfo], now: TimeInterval) -> [FileNode] {
+        FileNodeSorter.sort(nodes, by: sortMode, reversed: sortReversed, infos: infos, now: now)
     }
 
     /// True when the node itself or any ancestor has an id in the set.
@@ -730,7 +686,13 @@ final class AppModel {
 
     /// Builds and presents a delete plan. Pass `only:` to act on exactly one node
     /// (context menu), bypassing marks and selection.
-    func requestDelete(only explicitNode: FileNode? = nil) {
+    func requestDelete(only explicitNode: FileNode) {
+        requestDelete(nodes: [explicitNode])
+    }
+
+    /// Builds and presents a delete plan for specific nodes (e.g. context menu on multiple selection),
+    /// bypassing marks. If `explicitNodes` is nil, falls back to `deleteCandidates`.
+    func requestDelete(nodes explicitNodes: [FileNode]? = nil) {
         guard pendingDelete == nil, !isTrashing, !isRestoring else { return }
         // Mid-scan sizes are partial: the sheet would under-promise what actually
         // gets trashed. Deletion unlocks once enumeration is complete.
@@ -738,7 +700,7 @@ final class AppModel {
             showToast("Still scanning — deletion unlocks when the scan finishes")
             return
         }
-        let baseCandidates = explicitNode.map { [$0] } ?? deleteCandidates
+        let baseCandidates = explicitNodes ?? deleteCandidates
         let candidates = TrashEngine.minimalCover(of: baseCandidates)
         guard !candidates.isEmpty else { return }
 
@@ -936,20 +898,51 @@ final class AppModel {
     }
 
     func revealInFinder() {
-        guard let row = cursorRow else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([row.node.url])
+        let selectedNodes = rows.filter { selectedIDs.contains($0.id) }.map(\.node)
+        let nodes = selectedNodes.isEmpty ? (cursorRow.map { [$0.node] } ?? []) : selectedNodes
+        revealInFinder(nodes: nodes)
+    }
+
+    func revealInFinder(nodes: [FileNode]) {
+        guard !nodes.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(nodes.map(\.url))
     }
 
     func openSelection() {
-        guard let row = cursorRow else { return }
-        NSWorkspace.shared.open(row.node.url)
+        let selectedNodes = rows.filter { selectedIDs.contains($0.id) }.map(\.node)
+        let nodes = selectedNodes.isEmpty ? (cursorRow.map { [$0.node] } ?? []) : selectedNodes
+        openSelection(nodes: nodes)
+    }
+
+    func openSelection(nodes: [FileNode]) {
+        for node in nodes {
+            NSWorkspace.shared.open(node.url)
+        }
     }
 
     func copyPath() {
-        guard let row = cursorRow else { return }
+        let selectedNodes = rows.filter { selectedIDs.contains($0.id) }.map(\.node)
+        let nodes = selectedNodes.isEmpty ? (cursorRow.map { [$0.node] } ?? []) : selectedNodes
+        copyPaths(nodes: nodes)
+    }
+
+    func copyPaths(nodes: [FileNode]) {
+        guard !nodes.isEmpty else { return }
+        let paths = nodes.map(\.path).joined(separator: "\n")
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(row.node.path, forType: .string)
-        showToast("Path copied")
+        NSPasteboard.general.setString(paths, forType: .string)
+        showToast(nodes.count > 1 ? "\(nodes.count) paths copied" : "Path copied")
+    }
+
+    func toggleMarks(nodes: [FileNode]) {
+        let allMarked = nodes.allSatisfy { marks[$0.id] != nil }
+        for node in nodes {
+            if allMarked {
+                marks.removeValue(forKey: node.id)
+            } else {
+                marks[node.id] = node
+            }
+        }
     }
 
     func chooseFolder() {
@@ -996,11 +989,42 @@ final class AppModel {
         }
     }
 
+    func toggleSortDirection() {
+        sortReversed.toggle()
+    }
+
     func cycleSort() {
         let all = SortMode.allCases
         let idx = all.firstIndex(of: sortMode) ?? 0
         sortMode = all[(idx + 1) % all.count]
         sortReversed = false
+    }
+
+    var sortDirectionSymbol: String {
+        sortReversed ? "arrow.up" : "arrow.down"
+    }
+
+    var sortDirectionHelp: String {
+        switch sortMode {
+        case .untouched:
+            return sortReversed ? "Untouched: Shortest untouched first (click to reverse)"
+                                : "Untouched: Longest untouched first (click to reverse)"
+        case .size:
+            return sortReversed ? "Size: Smallest first (click to reverse)"
+                                : "Size: Largest first (click to reverse)"
+        case .reclaim:
+            return sortReversed ? "Reclaim: Lowest score first (click to reverse)"
+                                : "Reclaim: Highest score first (click to reverse)"
+        case .forgotten:
+            return sortReversed ? "Forgotten: Smallest & newest first (click to reverse)"
+                                : "Forgotten: Oldest & largest first (click to reverse)"
+        case .count:
+            return sortReversed ? "Files: Fewest files first (click to reverse)"
+                                : "Files: Most files first (click to reverse)"
+        case .name:
+            return sortReversed ? "Name: Z to A (click to reverse)"
+                                : "Name: A to Z (click to reverse)"
+        }
     }
 }
 

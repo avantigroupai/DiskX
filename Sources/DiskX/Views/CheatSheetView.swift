@@ -98,8 +98,9 @@ struct CheatSheetView: View {
     ]
 
     private static let sortView: [Shortcut] = [
-        Shortcut(["1 – 5"], "Sorts"),
+        Shortcut(["1 – 6"], "Sorts"),
         Shortcut(["S"], "Cycle sort"),
+        Shortcut(["⇧S"], "Reverse sort order"),
         Shortcut(["`"], "Top files"),
         Shortcut(["G"], "Goal"),
         Shortcut(["/"], "Search"),

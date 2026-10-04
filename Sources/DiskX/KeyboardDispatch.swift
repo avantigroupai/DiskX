@@ -110,13 +110,16 @@ extension AppModel {
             inspectorVisible.toggle(); return true
         case key == "g":
             goalActive = true; return true
+        case key == "s" && shift:
+            toggleSortDirection(); return true
         case key == "s":
             cycleSort(); return true
         case key == "1": selectSort(.reclaim); return true
         case key == "2": selectSort(.size); return true
-        case key == "3": selectSort(.forgotten); return true
-        case key == "4": selectSort(.count); return true
-        case key == "5": selectSort(.name); return true
+        case key == "3": selectSort(.untouched); return true
+        case key == "4": selectSort(.forgotten); return true
+        case key == "5": selectSort(.count); return true
+        case key == "6": selectSort(.name); return true
         case key == "`":
             scope = nil
             flatTop.toggle(); return true

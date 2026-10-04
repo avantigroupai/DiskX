@@ -129,13 +129,14 @@ Every classification shows its reasoning in the WHY line. Nothing is ever auto-d
 
 The **displayed number is always honest gigabytes-reclaimable**, never an abstract score; the score only orders rows. `I` on any row shows the exact arithmetic.
 
-### 4.2 All sort modes (keys 1–5; S cycles; same key again reverses)
+### 4.2 All sort modes (keys 1–6; S cycles; ⇧S or same key again reverses)
 
 1. **Reclaim** (default) — as above.
 2. **Size** — allocated bytes descending, logical shown secondary. Default on external/network volumes where the ruleset does not apply.
-3. **Grown** — diff vs the automatically kept baseline of the previous scan (plus user-saved baselines), with Grew / New / Shrank / Removed badges. Answers the "my disk filled overnight" panic.
+3. **Untouched** — duration since last touched (fresher of modified/accessed). Descending: longest untouched first. Ascending: shortest untouched / freshest first.
 4. **Forgotten** — staleness × size, pure Large & Old, no safety weighting.
-5. **Name/Kind** — alphabetical with kind grouping; also Count sub-order for inode hogs (node_modules).
+5. **Files** (Count) — sub-order for inode hogs (node_modules).
+6. **Name** — alphabetical with case/numeric sorting.
 
 Sort mode, scope, view, and volume persist across launches. Sorts are lenses over one ledger: same rows, same marks, same keyboard state; re-sorts animate gently with selection preserved.
 
@@ -209,8 +210,9 @@ Marks take precedence over highlight; the status bar always states exactly what 
 ### Sort and view
 | Key | Action |
 |---|---|
-| 1–5 | Reclaim · Size · Grown · Forgotten · Name/Kind |
-| S | Cycle sorts; same sort again reverses |
+| 1–6 | Reclaim · Size · Untouched · Forgotten · Files · Name |
+| S | Cycle sorts |
+| ⇧S | Reverse sort direction (ascending ↔ descending) |
 | ` | Toggle flat Top Files view |
 | ⌥M | Toggle Treemap ↔ Strata |
 | G | Goal Mode |

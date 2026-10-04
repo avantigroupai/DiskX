@@ -273,29 +273,61 @@ private struct FileRowView: View {
         return .clear
     }
 
+    private var isMultiSelected: Bool {
+        model.selectedIDs.contains(row.id) && model.selectedIDs.count > 1
+    }
+
+    private var targetNodes: [FileNode] {
+        if isMultiSelected {
+            let selected = model.rows.filter { model.selectedIDs.contains($0.id) }.map(\.node)
+            return selected.isEmpty ? [row.node] : selected
+        }
+        return [row.node]
+    }
+
     @ViewBuilder
     private var contextMenuItems: some View {
-        // Item actions operate on the cursor row, so aim the cursor first.
-        Button("Reveal in Finder") {
-            model.moveCursorTo(index)
-            model.revealInFinder()
-        }
-        Button("Open") {
-            model.moveCursorTo(index)
-            model.openSelection()
-        }
-        Button("Copy Path") {
-            model.moveCursorTo(index)
-            model.copyPath()
-        }
-        Button(isMarked ? "Unmark (X)" : "Mark (X)") {
-            model.toggleMark(row.node)
-        }
-        Divider()
-        Button("Move to Trash (⌫)") {
-            model.moveCursorTo(index)
-            // Scope to the clicked row — background marks must not ride along.
-            model.requestDelete(only: row.node)
+        if isMultiSelected {
+            let count = targetNodes.count
+            Button("Reveal in Finder") {
+                model.revealInFinder(nodes: targetNodes)
+            }
+            Button("Open") {
+                model.openSelection(nodes: targetNodes)
+            }
+            Button("Copy Paths") {
+                model.copyPaths(nodes: targetNodes)
+            }
+            Button(targetNodes.allSatisfy { model.marks[$0.id] != nil } ? "Unmark \(count) Items (X)" : "Mark \(count) Items (X)") {
+                model.toggleMarks(nodes: targetNodes)
+            }
+            Divider()
+            Button("Move \(count) Items to Trash (⌫)") {
+                model.requestDelete(nodes: targetNodes)
+            }
+        } else {
+            // Item actions operate on the cursor row, so aim the cursor first.
+            Button("Reveal in Finder") {
+                model.moveCursorTo(index)
+                model.revealInFinder()
+            }
+            Button("Open") {
+                model.moveCursorTo(index)
+                model.openSelection()
+            }
+            Button("Copy Path") {
+                model.moveCursorTo(index)
+                model.copyPath()
+            }
+            Button(isMarked ? "Unmark (X)" : "Mark (X)") {
+                model.toggleMark(row.node)
+            }
+            Divider()
+            Button("Move to Trash (⌫)") {
+                model.moveCursorTo(index)
+                // Scope to the clicked row — background marks must not ride along.
+                model.requestDelete(only: row.node)
+            }
         }
     }
 

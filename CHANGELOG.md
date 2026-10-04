@@ -7,6 +7,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.0.4] — 2026-10-04
+
+### Added
+
+- **Multi-Selection Context Menu Deletion**:
+  Right-clicking when multiple files are selected now shows a dedicated **"Move \(count) Items to Trash (⌫)"** option that operates on all selected files simultaneously while ensuring unrelated background marks do not ride along.
+- **Multi-Selection Row Actions**:
+  "Reveal in Finder", "Open", "Copy Paths", and "Mark/Unmark" in the context menu now seamlessly process all selected items together.
+- **"Untouched" Sort Mode (Key `3`)**:
+  Sort files by how long they have been untouched (using the fresher of modification and access timestamps). Longest untouched files appear first by default; toggle with `⇧S` or the toolbar direction button to reverse.
+- **Sort Direction Reversal (`⇧S`)**:
+  Reverse sort direction for all six sort modes with `⇧S`, the menu bar item, or the direction button in the toolbar.
+- **Test Coverage**:
+  Added comprehensive tests for multi-node trashing, detaching, restore, and untouched duration sorting (64 tests total, all passing).
+
 ## [1.0.1] — 2026-08-11
 
 The first build users can simply open. 1.0.0 was ad-hoc signed, so macOS

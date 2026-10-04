@@ -290,7 +290,7 @@ Notable pieces:
   space against what Finder reports, so the total adds up instead of leaving
   users to wonder about "System Data".
 - **`KeyboardDispatch`** centralizes the key map (`↑↓/jk`, `→/Return`, `←/⌘↑`,
-  `X`, `Space`, `1–5`, `` ` ``, `G`, `?`) so the bindings live in one place
+  `X`, `Space`, `1–6`, `S`, `⇧S`, `` ` ``, `G`, `?`) so the bindings live in one place
   rather than scattered across views.
 - **`QuickLookController`** bridges to `QLPreviewPanel` for `Space`.
 - **`AppTheme`** carries light/dark/system with semantic colors and Liquid Glass
@@ -389,6 +389,7 @@ No window server required.
 |---|---|
 | `EngineTests.swift` | Scanner counts/sizes/sorting, hard-link dedup, symlink non-traversal, top-N selection, unreadable-root failure; treemap tiling, proportionality and degenerate inputs; both classifiers and inheritance. |
 | `ReclaimTests.swift` | Staleness buckets, category→tier mapping, score ordering, safe-reclaim aggregation, safe-subtree pruning, hotspot selection, WHY lines, standalone classification. |
+| `SortTests.swift` | SortMode metadata, untouched sorting (longest/shortest first), timestamp comparison, unknown timestamp sinking, tie breakers, sort direction reversal. |
 | `TrashTests.swift` | Minimal cover, trash/restore round-trip with tree bookkeeping, honest failure reporting. |
 | `FormatTests.swift` | Byte/count formatting and the age buckets that appear in every WHY line. |
 
