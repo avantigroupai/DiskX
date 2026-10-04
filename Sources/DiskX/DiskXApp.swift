@@ -39,12 +39,20 @@ struct DiskXApp: App {
                     .keyboardShortcut("z")
                     .disabled(model.undoStack.isEmpty)
             }
-            // Standard Edit items stay intact for text fields; row-scoped ⌘A/⌘C are
+            // Standard Edit items stay intact for text fields; row-scoped ⌘A/⌘C/⌘⌫ are
             // handled by the key dispatcher when no field is focused.
             CommandGroup(after: .pasteboard) {
                 Divider()
+                Button("Find…") {
+                    NotificationCenter.default.post(name: .diskxFocusSearch, object: nil)
+                }
+                .keyboardShortcut("f")
                 Button("Copy Path") { model.copyPath() }
                     .keyboardShortcut("c", modifiers: [.command, .option])
+                Button(model.selectedIDs.count > 1 ? "Move \(model.selectedIDs.count) Items to Trash…" : "Move to Trash…") {
+                    model.requestDelete()
+                }
+                .keyboardShortcut(.delete, modifiers: .command)
             }
             CommandMenu("Go") {
                 Button("Enclosing Folder") { model.ascend() }
@@ -53,6 +61,8 @@ struct DiskXApp: App {
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                 Button("Open") { model.openSelection() }
                     .keyboardShortcut("o", modifiers: [.command, .shift])
+                Button("Quick Look") { model.quickLook() }
+                    .keyboardShortcut("y", modifiers: .command)
             }
             CommandMenu("Sort") {
                 Picker("Sort By", selection: Binding(get: { model.sortMode }, set: { model.selectSort($0) })) {

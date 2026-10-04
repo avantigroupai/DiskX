@@ -289,13 +289,13 @@ private struct FileRowView: View {
     private var contextMenuItems: some View {
         if isMultiSelected {
             let count = targetNodes.count
-            Button("Reveal in Finder") {
+            Button("Reveal in Finder (E)") {
                 model.revealInFinder(nodes: targetNodes)
             }
-            Button("Open") {
+            Button("Open (⏎)") {
                 model.openSelection(nodes: targetNodes)
             }
-            Button("Copy Paths") {
+            Button("Copy Paths (⌘C)") {
                 model.copyPaths(nodes: targetNodes)
             }
             Button(targetNodes.allSatisfy { model.marks[$0.id] != nil } ? "Unmark \(count) Items (X)" : "Mark \(count) Items (X)") {
@@ -307,15 +307,15 @@ private struct FileRowView: View {
             }
         } else {
             // Item actions operate on the cursor row, so aim the cursor first.
-            Button("Reveal in Finder") {
+            Button("Reveal in Finder (E)") {
                 model.moveCursorTo(index)
                 model.revealInFinder()
             }
-            Button("Open") {
+            Button("Open (⏎)") {
                 model.moveCursorTo(index)
                 model.openSelection()
             }
-            Button("Copy Path") {
+            Button("Copy Path (⌘C)") {
                 model.moveCursorTo(index)
                 model.copyPath()
             }

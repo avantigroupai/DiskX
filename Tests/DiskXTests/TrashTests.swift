@@ -120,6 +120,30 @@ final class TrashTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: file2URL.path))
         XCTAssertEqual(root.fileCount, 2)
     }
+
+    func testMultiItemCoverWithSeparateSubtrees() throws {
+        let dirA = tempDir.appendingPathComponent("dirA")
+        let dirB = tempDir.appendingPathComponent("dirB")
+        try FileManager.default.createDirectory(at: dirA, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: dirB, withIntermediateDirectories: true)
+        try Data(repeating: 1, count: 500).write(to: dirA.appendingPathComponent("a1.bin"))
+        try Data(repeating: 2, count: 500).write(to: dirA.appendingPathComponent("a2.bin"))
+        try Data(repeating: 3, count: 500).write(to: dirB.appendingPathComponent("b1.bin"))
+
+        let root = try scan(tempDir.path)
+        let nodeA = root.children.first { $0.name == "dirA" }!
+        let nodeA1 = nodeA.children.first { $0.name == "a1.bin" }!
+        let nodeB = root.children.first { $0.name == "dirB" }!
+        let nodeB1 = nodeB.children.first { $0.name == "b1.bin" }!
+
+        // When dirA and a child of dirA are both in the list, minimalCover retains dirA
+        // while also retaining separate subtree nodeB1
+        let cover = TrashEngine.minimalCover(of: [nodeA1, nodeA, nodeB1])
+        XCTAssertEqual(cover.count, 2)
+        XCTAssertTrue(cover.contains(where: { $0.id == nodeA.id }))
+        XCTAssertTrue(cover.contains(where: { $0.id == nodeB1.id }))
+        XCTAssertFalse(cover.contains(where: { $0.id == nodeA1.id }))
+    }
 }
 
 private final class Holder: @unchecked Sendable {

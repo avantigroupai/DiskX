@@ -7,6 +7,25 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.0.5] — 2026-10-04
+
+### Added
+
+- **Keyboard Shortcut for Multi-Selection Deletion (`⌫`, `⌘⌫`, `⌦`, `D`)**:
+  Pressing the Delete key, `⌘⌫` (Command + Backspace), Forward Delete, or `D` on any multi-file selection now prompts with the confirmation sheet asking "Move \(n) items to Trash? Frees about X now."
+- **Prioritize Multi-Selection over Background Marks**:
+  When two or more items are actively selected on screen, Delete commands immediately target the active selection rather than background marks.
+- **Full Keyboard Navigation in Confirmation Dialog**:
+  Confirm deletion with `Return` or `Y` (an explicit `Y` is required if deleting risky user data), or cancel with `Esc`, `N`, or `⌘.`. Numeric keypad Enter (code 76) is also supported.
+- **Command-Key Enhancements (`⌘⌫`, `⌘F`, `⇧⌘R`, `⇧⌘O`)**:
+  Added native macOS shortcuts for Move to Trash (`⌘⌫`), Find/Filter (`⌘F`), Reveal in Finder (`⇧⌘R`), and Open (`⇧⌘O`).
+- **Batch Marking with `X`**:
+  Pressing `X` on multiple selected rows now marks or unmarks all selected items at once.
+- **Menu Bar Integration**:
+  Added discoverable menu bar commands for Move to Trash (`⌘⌫`), Find (`⌘F`), and Quick Look (`⌘Y`).
+- **Context Menu Keyboard Badges**:
+  Context menu entries now show their keyboard equivalents (`E`, `⏎`, `⌘C`, `X`, `⌫`).
+
 ## [1.0.4] — 2026-10-04
 
 ### Added

@@ -18,10 +18,9 @@ Every existing analyzer sorts by raw size, which puts `/System` and your Photos 
 
 ## Download
 
-**[⬇ Download DiskX 1.0.4 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
+**[⬇ Download DiskX 1.0.5 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
 
-1.0.4 adds untouched-duration sorting (`3` / `⇧S` to reverse) and multi-selection
-context menu trashing. Update from previous versions.
+1.0.5 adds full keyboard shortcuts for deletion confirmation, multi-selection trashing (`⌫`, `⌘⌫`), `⌘F` search, and batch actions. Update from previous versions.
 
 Drag it to Applications and open it. No right-click → Open, no `xattr`, no
 Privacy & Security detour: it is Developer ID signed, notarized by Apple, and

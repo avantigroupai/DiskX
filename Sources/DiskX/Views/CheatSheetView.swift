@@ -83,17 +83,19 @@ struct CheatSheetView: View {
     private static let selectMark: [Shortcut] = [
         Shortcut(["⇧ ↑ ↓"], "Extend selection"),
         Shortcut(["⌘ A"], "Select all"),
-        Shortcut(["X"], "Mark"),
+        Shortcut(["X"], "Mark / unmark"),
         Shortcut(["⇧ X"], "Clear marks"),
     ]
 
     private static let act: [Shortcut] = [
-        Shortcut(["⌫", "D"], "Delete"),
-        Shortcut(["⏎", "Y"], "Confirm"),
-        Shortcut(["⎋", "N"], "Cancel"),
+        Shortcut(["⌫", "⌘⌫", "D"], "Move to Trash"),
+        Shortcut(["⏎", "Y"], "Confirm delete"),
+        Shortcut(["⎋", "N", "⌘."], "Cancel delete"),
         Shortcut(["⌘ Z"], "Undo"),
         Shortcut(["Space"], "Preview"),
-        Shortcut(["E"], "Reveal in Finder"),
+        Shortcut(["E", "⇧⌘R"], "Reveal in Finder"),
+        Shortcut(["⏎", "⇧⌘O"], "Open"),
+        Shortcut(["⌘ C"], "Copy path(s)"),
         Shortcut(["I"], "Inspector"),
     ]
 
@@ -103,7 +105,7 @@ struct CheatSheetView: View {
         Shortcut(["⇧S"], "Reverse sort order"),
         Shortcut(["`"], "Top files"),
         Shortcut(["G"], "Goal"),
-        Shortcut(["/"], "Search"),
+        Shortcut(["⌘F", "/"], "Search"),
         Shortcut(["?"], "This sheet"),
         Shortcut(["P"], "Pause scan"),
     ]

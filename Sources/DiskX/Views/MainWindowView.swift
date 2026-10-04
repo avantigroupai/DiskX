@@ -173,10 +173,14 @@ struct MainWindowView: View {
     private func installKeyMonitor() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            // Only intercept keys for our own key window (not panels, open dialogs…).
-            guard let window = event.window,
-                  window.isKeyWindow,
-                  !(window is NSPanel) else { return event }
+            // Only intercept keys for our own key window (not open/save dialogs or system panels).
+            // When a delete confirmation sheet is presented, allow its keys through even if
+            // presented via a sheet panel.
+            guard let window = event.window ?? NSApp.keyWindow,
+                  window.isKeyWindow else { return event }
+            if window is NSPanel && model.pendingDelete == nil {
+                return event
+            }
             return model.handleKey(event) ? nil : event
         }
     }

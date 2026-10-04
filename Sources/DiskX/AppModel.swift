@@ -623,6 +623,15 @@ final class AppModel {
         ascend()
     }
 
+    func toggleMarkAtSelection() {
+        if selectedIDs.count > 1 {
+            let selectedNodes = rows.filter { selectedIDs.contains($0.id) }.map(\.node)
+            toggleMarks(nodes: selectedNodes)
+            return
+        }
+        toggleMarkAtCursor()
+    }
+
     func toggleMarkAtCursor() {
         guard let row = cursorRow else { return }
         toggleMark(row.node)
@@ -641,10 +650,13 @@ final class AppModel {
         marks = [:]
     }
 
-    /// What Delete would act on right now: marks win, then selection, then cursor row.
+    /// What Delete would act on right now: multi-selection wins, then marks, then single selection / cursor row.
     var deleteCandidates: [FileNode] {
-        if !marks.isEmpty { return Array(marks.values) }
         let selectedNodes = rows.filter { selectedIDs.contains($0.id) }.map(\.node)
+        if selectedIDs.count > 1, !selectedNodes.isEmpty {
+            return selectedNodes
+        }
+        if !marks.isEmpty { return Array(marks.values) }
         if !selectedNodes.isEmpty { return selectedNodes }
         return cursorRow.map { [$0.node] } ?? []
     }
@@ -653,7 +665,14 @@ final class AppModel {
         let candidates = deleteCandidates
         guard !candidates.isEmpty else { return "" }
         let bytes = candidates.reduce(Int64(0)) { $0 + $1.allocatedSize }
-        let what = marks.isEmpty ? "selected" : "marked"
+        let what: String
+        if selectedIDs.count > 1 {
+            what = "selected"
+        } else if !marks.isEmpty {
+            what = "marked"
+        } else {
+            what = "selected"
+        }
         return "\(candidates.count) \(what) — \(Format.bytes(bytes))"
     }
 

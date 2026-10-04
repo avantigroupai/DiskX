@@ -25,19 +25,21 @@ extension AppModel {
         // 1 — Confirm sheet: Return/Y confirm (Return inert when risky), Esc/N cancel.
         if let plan = pendingDelete {
             switch true {
-            case code == kReturn && !plan.risky:
+            case (code == kReturn || code == 76) && !plan.risky:
                 confirmDelete(); return true
-            case code == kReturn && plan.risky:
+            case (code == kReturn || code == 76) && plan.risky:
                 return true      // deliberately inert — Y required (spec §7.3)
             case key == "y" && !cmd:
                 confirmDelete(); return true
-            case code == kEscape || (key == "n" && !cmd):
+            case code == kEscape || (key == "n" && !cmd) || (cmd && key == "."):
                 cancelDelete(); return true
             case code == kSpace:
                 if let first = plan.items.first {
                     QuickLookController.shared.toggle(urls: plan.items.map(\.url))
                     _ = first
                 }
+                return true
+            case code == kDelete || code == kForwardDelete:
                 return true
             default:
                 return false     // Tab & arrows keep native sheet behavior
@@ -68,13 +70,25 @@ extension AppModel {
             return false
         }
 
-        // 5 — Command keys: row-scoped ⌘↑/⌘A/⌘C here (text fields are already ruled
-        // out above, so the system Edit menu keeps working while editing); the rest
-        // fall through to the menu bar.
+        // 5 — Command keys: row-scoped ⌘↑/⌘A/⌘C/⌘⌫/⌘F here (text fields are already
+        // ruled out above, so the system Edit menu keeps working while editing); the
+        // rest fall through to the menu bar.
         if cmd {
             if code == kUp { ascend(); return true }
             if key == "a" && !shift && !option { selectAll(); return true }
             if key == "c" && !shift && !option { copyPath(); return true }
+            if (code == kDelete || code == kForwardDelete || key == "\u{7f}" || key == "\u{08}") && !shift {
+                requestDelete(); return true
+            }
+            if key == "f" && !shift && !option {
+                NotificationCenter.default.post(name: .diskxFocusSearch, object: nil); return true
+            }
+            if key == "r" && shift && !option {
+                revealInFinder(); return true
+            }
+            if key == "o" && shift && !option {
+                openSelection(); return true
+            }
             return false
         }
 
@@ -101,8 +115,8 @@ extension AppModel {
         case key == "x" && shift:
             clearMarks(); return true
         case key == "x":
-            toggleMarkAtCursor(); return true
-        case code == kDelete || code == kForwardDelete || key == "d":
+            toggleMarkAtSelection(); return true
+        case code == kDelete || code == kForwardDelete || key == "d" || key == "\u{7f}" || key == "\u{08}":
             requestDelete(); return true
         case key == "e":
             revealInFinder(); return true
