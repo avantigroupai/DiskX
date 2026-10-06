@@ -20,6 +20,8 @@ struct FileListView: View {
         VStack(spacing: 0) {
             BreadcrumbBar(model: model)
             Divider()
+            ListColumnHeaderBar(model: model)
+            Divider()
             // The scroll view spans the full pane so the scroll bar sits at the card
             // edge (macOS convention); row content carries its own insets instead.
             listBody
@@ -87,43 +89,99 @@ private struct BreadcrumbBar: View {
 
     var body: some View {
         let crumbs = model.breadcrumb
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    ForEach(Array(crumbs.enumerated()), id: \.element.id) { index, node in
-                        if index > 0 {
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                        if index == crumbs.count - 1 {
-                            Text(displayName(node))
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                                .id(node.id)
-                        } else {
-                            Button {
-                                model.navigate(to: node)
-                            } label: {
-                                Text(displayName(node))
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
+        HStack(spacing: 8) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(Array(crumbs.enumerated()), id: \.element.id) { index, node in
+                            if index > 0 {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(.tertiary)
                             }
-                            .buttonStyle(.plain)
-                            .id(node.id)
+                            if index == crumbs.count - 1 {
+                                Text(displayName(node))
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                    .id(node.id)
+                            } else {
+                                Button {
+                                    model.navigate(to: node)
+                                } label: {
+                                    Text(displayName(node))
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .buttonStyle(.plain)
+                                .id(node.id)
+                            }
                         }
                     }
+                    .padding(.horizontal, 10)
                 }
-                .padding(.horizontal, 10)
-            }
-            .frame(height: 28)
-            .onChange(of: crumbs.last?.id) { _, lastID in
-                if let lastID {
-                    proxy.scrollTo(lastID, anchor: .trailing)
+                .frame(height: 28)
+                .onChange(of: crumbs.last?.id) { _, lastID in
+                    if let lastID {
+                        proxy.scrollTo(lastID, anchor: .trailing)
+                    }
                 }
             }
+
+            Spacer(minLength: 4)
+
+            // Direct Sort Menu & Direction Toggle
+            HStack(spacing: 4) {
+                Menu {
+                    Section("Sort By") {
+                        ForEach(SortMode.allCases) { mode in
+                            Button {
+                                model.selectSort(mode)
+                            } label: {
+                                HStack {
+                                    Text("\(mode.label) (\(mode.rawValue))")
+                                    if model.sortMode == mode {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Section {
+                        Button(model.sortReversed ? "Ascending (Lowest First)" : "Descending (Highest First)") {
+                            model.toggleSortDirection()
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: model.sortMode.symbolName)
+                            .font(.system(size: 10))
+                        Text(model.sortMode.label)
+                            .font(.system(size: 11, weight: .medium))
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 8))
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Sort order — keys 1–6, S cycles, ⇧S reverses")
+
+                Button {
+                    model.toggleSortDirection()
+                } label: {
+                    Image(systemName: model.sortDirectionSymbol)
+                        .font(.system(size: 10, weight: .semibold))
+                        .padding(4)
+                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+                .help(model.sortDirectionHelp + " (⇧S)")
+            }
+            .padding(.trailing, 8)
         }
     }
 
@@ -134,6 +192,75 @@ private struct BreadcrumbBar: View {
             return tail.isEmpty ? node.name : tail
         }
         return node.name
+    }
+}
+
+// MARK: - Column header bar
+
+@MainActor
+private struct ListColumnHeaderBar: View {
+    let model: AppModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button {
+                model.selectSort(.name)
+            } label: {
+                HStack(spacing: 3) {
+                    Text("NAME")
+                        .font(.system(size: 10, weight: model.sortMode == .name ? .bold : .medium))
+                    if model.sortMode == .name {
+                        Image(systemName: model.sortReversed ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                }
+                .foregroundStyle(model.sortMode == .name ? .primary : .secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Sort by Name (Key 6)")
+
+            Spacer()
+
+            Button {
+                model.selectSort(.untouched)
+            } label: {
+                HStack(spacing: 3) {
+                    Text("UNTOUCHED")
+                        .font(.system(size: 10, weight: model.sortMode == .untouched ? .bold : .medium))
+                    if model.sortMode == .untouched {
+                        Image(systemName: model.sortReversed ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                }
+                .foregroundStyle(model.sortMode == .untouched ? .primary : .secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Sort by Untouched duration (Key 3)")
+
+            Button {
+                if model.sortMode == .size {
+                    model.toggleSortDirection()
+                } else {
+                    model.selectSort(.size)
+                }
+            } label: {
+                HStack(spacing: 3) {
+                    Text(model.sortMode == .reclaim ? "RECLAIMABLE" : "SIZE")
+                        .font(.system(size: 10, weight: (model.sortMode == .size || model.sortMode == .reclaim) ? .bold : .medium))
+                    if model.sortMode == .size || model.sortMode == .reclaim {
+                        Image(systemName: model.sortReversed ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                }
+                .foregroundStyle((model.sortMode == .size || model.sortMode == .reclaim) ? .primary : .secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Sort by Size (Key 2) / Reclaim (Key 1)")
+        }
+        .padding(.leading, 54)
+        .padding(.trailing, 22)
+        .padding(.vertical, 4)
+        .background(Color.primary.opacity(0.03))
     }
 }
 
@@ -305,6 +432,8 @@ private struct FileRowView: View {
             Button("Move \(count) Items to Trash (⌫)") {
                 model.requestDelete(nodes: targetNodes)
             }
+            Divider()
+            sortMenu
         } else {
             // Item actions operate on the cursor row, so aim the cursor first.
             Button("Reveal in Finder (E)") {
@@ -327,6 +456,32 @@ private struct FileRowView: View {
                 model.moveCursorTo(index)
                 // Scope to the clicked row — background marks must not ride along.
                 model.requestDelete(only: row.node)
+            }
+            Divider()
+            sortMenu
+        }
+    }
+
+    private var sortMenu: some View {
+        Menu("Sort By") {
+            Section {
+                ForEach(SortMode.allCases) { mode in
+                    Button {
+                        model.selectSort(mode)
+                    } label: {
+                        HStack {
+                            Text("\(mode.label) (\(mode.rawValue))")
+                            if model.sortMode == mode {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+            Section {
+                Button(model.sortReversed ? "Ascending (Lowest First)" : "Descending (Highest First)") {
+                    model.toggleSortDirection()
+                }
             }
         }
     }

@@ -7,6 +7,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.0.7] — 2026-10-06
+
+### Fixed & Improved
+
+- **Truth Bar Capacity Strip Rendering**:
+  Fixed segmented bar right edge rendering where the Free space segment was drawn as a sharp 4-sided stroke rectangle clipped by a continuous rounded rectangle, causing missing corners and detached vertical line artifacts. Refactored the capacity bar to use a continuous background track, smooth outer border, and transparent Free segment with subpixel width normalization.
+- **File List Navigation & Sorting Controls**:
+  Added an interactive list column header bar (NAME, UNTOUCHED, SIZE/RECLAIMABLE) for one-click column sorting and direction toggles, a direct sort dropdown and reverse button in the breadcrumb bar, and contextual menu sort actions.
+
 ## [1.0.6] — 2026-10-04
 
 ### Comprehensive 88-Round QA & Hardening Release

@@ -70,13 +70,20 @@ struct TruthBarView: View {
     private func barSegments(totalWidth: CGFloat) -> [Segment] {
         let denominator = Double(totalBytes)
         guard denominator > 0, totalWidth > 0 else { return [] }
-        return segments.compactMap { segment in
+        var result: [Segment] = []
+        for segment in segments {
             let width = CGFloat(Double(segment.bytes) / denominator) * totalWidth
-            guard width >= 1 else { return nil }   // skip sub-point slivers
+            guard width >= 1 else { continue }   // skip sub-point slivers
             var sized = segment
             sized.width = width
-            return sized
+            result.append(sized)
         }
+        // Ensure segments cleanly span the exact total width without subpixel truncation gaps or overflow
+        if let lastIndex = result.indices.last {
+            let precedingWidth = result.dropLast().reduce(CGFloat(0)) { $0 + $1.width }
+            result[lastIndex].width = max(1, totalWidth - precedingWidth)
+        }
+        return result
     }
 
     // MARK: - Body
@@ -110,21 +117,30 @@ struct TruthBarView: View {
     private var capacityBar: some View {
         GeometryReader { geo in
             let visible = barSegments(totalWidth: geo.size.width)
-            if visible.isEmpty {
+            ZStack(alignment: .leading) {
+                // Track background
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.primary.opacity(0.04))
+                    .allowsHitTesting(false)
+
+                if !visible.isEmpty {
+                    HStack(spacing: 0) {
+                        ForEach(visible) { segment in
+                            barSegmentView(segment.style)
+                                .frame(width: segment.width)
+                                .help(segment.help)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: model.truth.scannedTotal)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: model.truth.scannedSafe)
+                }
+
+                // Outer border around the entire bar ensuring smooth rounded edges on both ends
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
-            } else {
-                HStack(spacing: 0) {
-                    ForEach(visible) { segment in
-                        segmentSwatch(segment.style)
-                            .frame(width: segment.width)
-                            .help(segment.help)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: model.truth.scannedTotal)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: model.truth.scannedSafe)
+                    .allowsHitTesting(false)
             }
         }
         .frame(height: Self.barHeight)
@@ -134,7 +150,7 @@ struct TruthBarView: View {
         HStack(spacing: 10) {
             ForEach(segments.filter { $0.bytes > 0 }) { segment in
                 HStack(spacing: 4) {
-                    segmentSwatch(segment.style)
+                    legendSwatch(segment.style)
                         .frame(width: 8, height: 8)
                     Text(segment.label)
                     Text(Format.bytes(segment.bytes))
@@ -149,7 +165,23 @@ struct TruthBarView: View {
     }
 
     @ViewBuilder
-    private func segmentSwatch(_ style: Segment.Style) -> some View {
+    private func barSegmentView(_ style: Segment.Style) -> some View {
+        switch style {
+        case .fill(let opacity):
+            Rectangle()
+                .fill(Color.primary.opacity(opacity))
+        case .hatched:
+            Rectangle()
+                .fill(Color.primary.opacity(0.08))
+                .overlay(hatchLines)
+        case .outline:
+            Color.clear
+                .contentShape(Rectangle())
+        }
+    }
+
+    @ViewBuilder
+    private func legendSwatch(_ style: Segment.Style) -> some View {
         switch style {
         case .fill(let opacity):
             Rectangle()
@@ -160,7 +192,11 @@ struct TruthBarView: View {
                 .overlay(hatchLines)
         case .outline:
             Rectangle()
-                .strokeBorder(Color.primary.opacity(0.3), lineWidth: 0.5)
+                .fill(Color.primary.opacity(0.04))
+                .overlay(
+                    Rectangle()
+                        .strokeBorder(Color.primary.opacity(0.3), lineWidth: 0.5)
+                )
         }
     }
 

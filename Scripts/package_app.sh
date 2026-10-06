@@ -92,10 +92,19 @@ build_product_path() {
   local arch="$2"
   local scratch
   scratch="$(scratch_path_for_arch "$arch")"
-  case "$arch" in
-    arm64|x86_64) echo "${scratch}/${arch}-apple-macosx/$CONF/$name" ;;
-    *) echo "${scratch}/$CONF/$name" ;;
-  esac
+  local candidates=(
+    "${scratch}/${arch}-apple-macosx/$CONF/$name"
+    "${scratch}/out/Products/Release/$name"
+    "${scratch}/out/Products/Debug/$name"
+    "${scratch}/$CONF/$name"
+  )
+  for c in "${candidates[@]}"; do
+    if [[ -f "$c" ]]; then
+      echo "$c"
+      return 0
+    fi
+  done
+  echo "${scratch}/${arch}-apple-macosx/$CONF/$name"
 }
 
 verify_binary_arches() {

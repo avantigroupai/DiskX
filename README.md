@@ -18,9 +18,9 @@ Every existing analyzer sorts by raw size, which puts `/System` and your Photos 
 
 ## Download
 
-**[⬇ Download DiskX 1.0.6 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
+**[⬇ Download DiskX 1.0.7 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
 
-1.0.6 is a comprehensive 88-round QA and hardening release: saturating arithmetic against overflow, duplicate-safe minimal cover in TrashEngine, micro-weight treemap stability, bare system prefix matching, deterministic sort tie-breaking, and keyboard shortcut support for multi-selection deletion.
+1.0.7 fixes capacity strip right-edge rendering artifacts and adds interactive column header and breadcrumb sorting controls.
 
 Drag it to Applications and open it. No right-click → Open, no `xattr`, no
 Privacy & Security detour: it is Developer ID signed, notarized by Apple, and
