@@ -167,6 +167,7 @@ final class AppModel {
     var cursor: Int = 0
     var selectedIDs: Set<UInt64> = []
     private var selectionAnchor: Int?
+    @ObservationIgnored var mouseDownModifiers: NSEvent.ModifierFlags = []
     private(set) var marks: [UInt64: FileNode] = [:]
 
     // Lenses
@@ -470,13 +471,17 @@ final class AppModel {
             selectedIDs = rows.isEmpty ? [] : [rows[0].id]
             selectionAnchor = nil
         } else {
+            let visibleIDs = Set(rows.map(\.id))
+            selectedIDs.formIntersection(visibleIDs)
             if let id = previousCursorID, let idx = rows.firstIndex(where: { $0.id == id }) {
                 cursor = idx
             } else {
                 cursor = min(cursor, max(0, rows.count - 1))
             }
             selectionAnchor = previousAnchorID.flatMap { id in rows.firstIndex(where: { $0.id == id }) }
-            if selectedIDs.isEmpty && !rows.isEmpty {
+            // Keep an intentional empty selection after ⌘-click. If the selected
+            // cursor item disappeared (for example after Trash), select its neighbor.
+            if selectedIDs.isEmpty && !rows.isEmpty && previousCursorID.map({ visibleIDs.contains($0) }) != true {
                 selectedIDs = [rows[cursor].id]
             }
         }
@@ -561,6 +566,32 @@ final class AppModel {
         selectedIDs = [rows[index].id]
     }
 
+    /// Finder-style list selection: click replaces, ⌘-click toggles, and
+    /// ⇧-click selects the range from the last click/cursor.
+    func selectRow(at index: Int, command: Bool, shift: Bool) {
+        guard rows.indices.contains(index) else { return }
+        if shift {
+            let anchor = selectionAnchor ?? cursor
+            let range = Set(rows[min(anchor, index)...max(anchor, index)].map(\.id))
+            if command {
+                selectedIDs.formUnion(range)
+            } else {
+                selectedIDs = range
+            }
+            selectionAnchor = anchor
+        } else if command {
+            let id = rows[index].id
+            if !selectedIDs.insert(id).inserted {
+                selectedIDs.remove(id)
+            }
+            selectionAnchor = index
+        } else {
+            selectedIDs = [rows[index].id]
+            selectionAnchor = index
+        }
+        cursor = index
+    }
+
     func setCursor(toNodeID id: UInt64) {
         if let idx = rows.firstIndex(where: { $0.id == id }) {
             moveCursorTo(idx)
@@ -602,6 +633,7 @@ final class AppModel {
 
     func selectAll() {
         selectedIDs = Set(rows.map(\.id))
+        selectionAnchor = cursor
     }
 
     func clearSelectionOrAscend() {
@@ -650,7 +682,7 @@ final class AppModel {
         marks = [:]
     }
 
-    /// What Delete would act on right now: multi-selection wins, then marks, then single selection / cursor row.
+    /// What Delete would act on right now: multi-selection wins, then marks, then a single selected row.
     var deleteCandidates: [FileNode] {
         let selectedNodes = rows.filter { selectedIDs.contains($0.id) }.map(\.node)
         if selectedIDs.count > 1, !selectedNodes.isEmpty {
@@ -658,7 +690,7 @@ final class AppModel {
         }
         if !marks.isEmpty { return Array(marks.values) }
         if !selectedNodes.isEmpty { return selectedNodes }
-        return cursorRow.map { [$0.node] } ?? []
+        return []
     }
 
     var statusSummary: String {

@@ -81,6 +81,8 @@ struct CheatSheetView: View {
     ]
 
     private static let selectMark: [Shortcut] = [
+        Shortcut(["⌘ Click"], "Toggle files"),
+        Shortcut(["⇧ Click"], "Select range"),
         Shortcut(["⇧ ↑ ↓"], "Extend selection"),
         Shortcut(["⌘ A"], "Select all"),
         Shortcut(["X"], "Mark / unmark"),

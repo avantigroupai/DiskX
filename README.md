@@ -18,9 +18,9 @@ Every existing analyzer sorts by raw size, which puts `/System` and your Photos 
 
 ## Download
 
-**[⬇ Download DiskX 1.0.7 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
+**[⬇ Download DiskX 1.0.8 (.dmg)](https://github.com/avantigroupai/DiskX/releases/latest)** — macOS 14 Sonoma or later, universal.
 
-1.0.7 fixes capacity strip right-edge rendering artifacts and adds interactive column header and breadcrumb sorting controls.
+1.0.8 adds visible batch Trash controls and reliable macOS multi-file selection shortcuts.
 
 Drag it to Applications and open it. No right-click → Open, no `xattr`, no
 Privacy & Security detour: it is Developer ID signed, notarized by Apple, and
@@ -36,7 +36,7 @@ Prefer to build it yourself? See [Build & run](#build--run) — it takes about t
 - **Truth Bar**: honest capacity accounting that reconciles with Finder — scanned files, "Other & System" (the System Data mystery, explained), purgeable, free. Plus "Reclaimable now: ~X safe" and a freed-this-session counter.
 - **WizTree-class scanning**: parallel `getattrlistbulk` work-stealing pool; hard links deduped by inode; live streaming results — never a blank wait.
 - **100 % keyboard**: `↑↓/jk` move · `→/Return` descend · `←/⌘↑` up · `X` mark across folders · `Space` QuickLook · `1–6` sorts (`⇧S` reverses) · `` ` `` flat Top-Files view · `G` goal mode ("I need 25 GB back") · `?` cheat sheet.
-- **Fear-free deletion**: select 1–n items → `Delete` → a keyboard-first confirm sheet. **Return or Y confirms, Esc or N cancels.** Risk-proportional friction: if everything regenerates, one Return suffices; if anything is *yours*, Return goes inert and an explicit `Y` is required. Trash-only (never permanent), app-level `⌘Z` restores the whole batch. Protected system items can never enter the flow.
+- **Fear-free deletion**: select multiple files with `⌘`-click, `⇧`-click, `⇧↑/↓`, or `⌘A`, then use the visible Trash button or `⌘Delete` to review the batch. **Return or Y confirms, Esc or N cancels.** Risk-proportional friction: if everything regenerates, one Return suffices; if anything is *yours*, Return goes inert and an explicit `Y` is required. Trash-only (never permanent), app-level `⌘Z` restores the whole batch. Protected system items can never enter the flow.
 
 ## DiskX vs. the alternatives
 

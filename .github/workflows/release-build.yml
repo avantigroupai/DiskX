@@ -1,0 +1,35 @@
+name: DiskX release build check
+
+on:
+  push:
+    branches:
+      - release/diskx-1.0.8
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Tests
+        run: swift test
+      - name: Build universal app for release verification
+        run: ARCHES="arm64 x86_64" SIGNING_MODE=adhoc Scripts/package_app.sh release
+      - name: Verify both architectures
+        run: |
+          lipo -archs DiskX.app/Contents/MacOS/DiskX
+          codesign --verify --deep --strict DiskX.app
+      - name: Archive verification build
+        run: ditto -c -k --keepParent DiskX.app DiskX-1.0.8-unnotarized-ci.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DiskX-1.0.8-unnotarized-ci
+          path: DiskX-1.0.8-unnotarized-ci.zip
+          retention-days: 7

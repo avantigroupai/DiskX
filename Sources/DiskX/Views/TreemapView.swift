@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import DiskXCore
 
 // MARK: - Tile geometry
@@ -213,7 +214,12 @@ struct TreemapView: View {
 
     private func handleSingleClick(at point: CGPoint) {
         guard let tile = tileAt(point) else { return }
-        model.setCursor(toNodeID: tile.isSubTile ? tile.topLevelID : tile.node.id)
+        let id = tile.isSubTile ? tile.topLevelID : tile.node.id
+        guard let index = model.rows.firstIndex(where: { $0.id == id }) else { return }
+        NotificationCenter.default.post(name: .diskxFocusFileList, object: nil)
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        let mods = model.mouseDownModifiers
+        model.selectRow(at: index, command: mods.contains(.command), shift: mods.contains(.shift))
     }
 
     private func handleDoubleClick(at point: CGPoint) {

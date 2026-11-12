@@ -7,6 +7,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.0.8] — 2026-11-12
+
+### Improved
+
+- Added a visible Move to Trash action with a batch count in both the file list and map views.
+- Made Command-click, Shift-click, Shift-arrow, and Command-A selection work consistently before Command-Delete opens the batch confirmation sheet.
+- Returned keyboard focus to the file view after a click, retained selection across live list updates, and prevented an empty selection from deleting the cursor item.
+
 ## [1.0.7] — 2026-10-06
 
 ### Fixed & Improved

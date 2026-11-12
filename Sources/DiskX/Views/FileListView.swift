@@ -131,6 +131,8 @@ private struct BreadcrumbBar: View {
 
             Spacer(minLength: 4)
 
+            TrashSelectionButton(model: model)
+
             // Direct Sort Menu & Direction Toggle
             HStack(spacing: 4) {
                 Menu {
@@ -192,6 +194,27 @@ private struct BreadcrumbBar: View {
             return tail.isEmpty ? node.name : tail
         }
         return node.name
+    }
+}
+
+@MainActor
+struct TrashSelectionButton: View {
+    let model: AppModel
+
+    var body: some View {
+        let count = model.deleteCandidates.count
+        Button {
+            model.requestDelete()
+        } label: {
+            Label(count > 1 ? "Move \(count) to Trash…" : "Move to Trash…", systemImage: "trash")
+                .font(.system(size: 11, weight: .medium))
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(count == 0 || (model.phase != .done && model.phase != .analyzing) ||
+                  model.isTrashing || model.isRestoring)
+        .help("Move selected items to Trash (⌘⌫). ⌘-click or ⇧-click to select multiple files.")
+        .accessibilityLabel(count > 1 ? "Move \(count) items to Trash" : "Move selection to Trash")
     }
 }
 
@@ -395,8 +418,8 @@ private struct FileRowView: View {
     }
 
     private var selectionColor: Color {
-        if isCursor { return Color.accentColor.opacity(0.18) }
-        if isSelected { return Color.accentColor.opacity(0.10) }
+        if isSelected { return Color.accentColor.opacity(0.18) }
+        if isCursor { return Color.accentColor.opacity(0.10) }
         return .clear
     }
 
@@ -489,18 +512,9 @@ private struct FileRowView: View {
     // MARK: Mouse
 
     private func handleSingleClick() {
-        let mods = NSEvent.modifierFlags
-        if mods.contains(.command) {
-            if model.selectedIDs.contains(row.id) {
-                model.selectedIDs.remove(row.id)
-            } else {
-                model.selectedIDs.insert(row.id)
-            }
-            model.cursor = index
-        } else if mods.contains(.shift) {
-            model.moveCursor(index - model.cursor, extending: true)
-        } else {
-            model.moveCursorTo(index)
-        }
+        NotificationCenter.default.post(name: .diskxFocusFileList, object: nil)
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        let mods = model.mouseDownModifiers
+        model.selectRow(at: index, command: mods.contains(.command), shift: mods.contains(.shift))
     }
 }

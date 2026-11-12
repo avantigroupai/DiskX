@@ -11,6 +11,7 @@ import DiskXCore
 struct MainWindowView: View {
     @Bindable var model: AppModel
     @State private var keyMonitor: Any?
+    @State private var mouseMonitor: Any?
 
     var body: some View {
         NavigationSplitView {
@@ -67,7 +68,9 @@ struct MainWindowView: View {
         }
         .onDisappear {
             if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+            if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
             keyMonitor = nil
+            mouseMonitor = nil
         }
     }
 
@@ -172,6 +175,12 @@ struct MainWindowView: View {
 
     private func installKeyMonitor() {
         guard keyMonitor == nil else { return }
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+            if let window = event.window, !(window is NSPanel) {
+                model.mouseDownModifiers = event.modifierFlags
+            }
+            return event
+        }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             // Only intercept keys for our own key window (not open/save dialogs or system panels).
             // When a delete confirmation sheet is presented, allow its keys through even if
@@ -209,6 +218,7 @@ struct FileListBreadcrumbOnly: View {
                 .buttonStyle(.plain)
             }
             Spacer()
+            TrashSelectionButton(model: model)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -235,6 +245,9 @@ struct SearchField: View {
         .background(RoundedRectangle(cornerRadius: 6).fill(.quaternary.opacity(0.5)))
         .onReceive(NotificationCenter.default.publisher(for: .diskxFocusSearch)) { _ in
             focused = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .diskxFocusFileList)) { _ in
+            focused = false
         }
         .help("Filter names (/) — Esc clears")
     }

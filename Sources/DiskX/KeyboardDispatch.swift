@@ -156,4 +156,5 @@ extension Notification.Name {
     /// dispatcher runs above the view tree and has no reference to the field, so
     /// this is the one hop back down.
     static let diskxFocusSearch = Notification.Name("diskxFocusSearch")
+    static let diskxFocusFileList = Notification.Name("diskxFocusFileList")
 }
