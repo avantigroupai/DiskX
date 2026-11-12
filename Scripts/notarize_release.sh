@@ -33,6 +33,8 @@
 #   APPLE_ID / APPLE_TEAM_ID / APPLE_PASSWORD  inline credentials instead of a profile
 #   ARCHES           space-separated arch list (default: "arm64 x86_64" universal)
 #   DIST_DIR         output directory (default: <root>/dist)
+#   PREBUILT_APP     verified CI .app to sign instead of building locally (useful
+#                    when this Mac has Command Line Tools but no full Xcode)
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -142,9 +144,59 @@ export APP_ENTITLEMENTS
 export SIGNING_MODE=identity
 export APP_IDENTITY
 
-"$ROOT/Scripts/package_app.sh" release
-
 APP="$ROOT/${APP_NAME}.app"
+if [[ -n "${PREBUILT_APP:-}" ]]; then
+  PREBUILT_APP="$(cd "$PREBUILT_APP" && pwd -P)"
+  if [[ "$PREBUILT_APP" == "$APP" ]]; then
+    echo "ERROR: PREBUILT_APP must be outside the release output path $APP" >&2
+    exit 1
+  fi
+
+  plist="$PREBUILT_APP/Contents/Info.plist"
+  binary="$PREBUILT_APP/Contents/MacOS/$APP_NAME"
+  if [[ ! -f "$plist" || ! -f "$binary" ]]; then
+    echo "ERROR: PREBUILT_APP is not a complete $APP_NAME bundle" >&2
+    exit 1
+  fi
+  plist_value() { /usr/libexec/PlistBuddy -c "Print :$1" "$plist"; }
+  expected_commit="$(git rev-parse --short HEAD)"
+  if [[ "$(plist_value CFBundleIdentifier)" != "$BUNDLE_ID" ||
+        "$(plist_value CFBundleShortVersionString)" != "$MARKETING_VERSION" ||
+        "$(plist_value CFBundleVersion)" != "$BUILD_NUMBER" ||
+        "$(plist_value GitCommit)" != "$expected_commit" ]]; then
+    echo "ERROR: PREBUILT_APP identity, version, build number, or source commit differs from this checkout" >&2
+    exit 1
+  fi
+  read -r -a expected_arches <<<"$ARCHES"
+  actual_arches="$(lipo -archs "$binary")"
+  if [[ "$(wc -w <<<"$actual_arches" | tr -d ' ')" -ne "${#expected_arches[@]}" ]]; then
+    echo "ERROR: PREBUILT_APP architectures differ: $actual_arches" >&2
+    exit 1
+  fi
+  for arch in "${expected_arches[@]}"; do
+    if [[ " $actual_arches " != *" $arch "* ]]; then
+      echo "ERROR: PREBUILT_APP is missing $arch" >&2
+      exit 1
+    fi
+  done
+
+  rm -rf "$APP"
+  cp -R "$PREBUILT_APP" "$APP"
+  chmod -R u+w "$APP"
+  xattr -cr "$APP"
+  find "$APP" -name '._*' -delete
+  for fw in "$APP/Contents/Frameworks/"*.framework; do
+    [[ -d "$fw" ]] || continue
+    while IFS= read -r -d '' bin; do
+      codesign --force --timestamp --options runtime --sign "$APP_IDENTITY" "$bin"
+    done < <(find "$fw" -type f -perm -111 -print0)
+    codesign --force --timestamp --options runtime --sign "$APP_IDENTITY" "$fw"
+  done
+  codesign --force --timestamp --options runtime --sign "$APP_IDENTITY" \
+    --entitlements "$APP_ENTITLEMENTS" "$APP"
+else
+  "$ROOT/Scripts/package_app.sh" release
+fi
 
 echo
 echo "==> Verifying signature"
